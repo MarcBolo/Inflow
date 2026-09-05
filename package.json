@@ -1,0 +1,27 @@
+{
+  "name": "inflow",
+  "version": "1.0.0",
+  "description": "让词库的灵感流入笔尖——自建词库智能联想补全插件（Obsidian）",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "node esbuild.config.mjs production",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "keywords": [
+    "obsidian",
+    "plugin",
+    "completion",
+    "scriptwriting"
+  ],
+  "author": "MarcBolo",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.11.5",
+    "builtin-modules": "^3.3.0",
+    "esbuild-wasm": "^0.21.5",
+    "obsidian": "latest",
+    "tslib": "^2.6.2",
+    "typescript": "^5.3.3"
+  }
+}

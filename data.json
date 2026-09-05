@@ -1,0 +1,58 @@
+{
+  "enabled": true,
+  "autoDialogue": true,
+  "enableSmartCompletion": true,
+  "enableContextAware": true,
+  "enableMinimalTrigger": true,
+  "enablePinyin": true,
+  "smartMinLength": 1,
+  "smartMaxSuggestions": 10,
+  "defaultSceneType": "int",
+  "enableQuickPanel": true,
+  "enableAutoRefresh": true,
+  "showAutoRefreshNotice": false,
+  "floatingButtonPosition": {
+    "x": 740,
+    "y": 145
+  },
+  "libraryColors": {
+    "单词": "#f59e0b",
+    "古装词库": "#3b82f6",
+    "通用": "#10b981"
+  },
+  "libraryIcons": {
+    "古装词库": "CI-streamline-stickies-color-help",
+    "通用": "CI-streamline-stickies-color-compass-1",
+    "单词": "CI-streamline-stickies-color-love-duo"
+  },
+  "libraryFolder": "词库",
+  "usageStats": {
+    "通用::人物点景": 8,
+    "通用::淡出": 3,
+    "古装词库::火焰山": 5,
+    "古装词库::后山禁地": 3,
+    "古装词库::天材地宝": 1,
+    "古装词库::主角": 1,
+    "单词::golf": 1,
+    "单词::sort of": 1,
+    "单词::refresh one's memory": 1,
+    "古装词库::灵药园": 8,
+    "古装词库::坊市": 1,
+    "古装词库::机缘巧合": 1,
+    "古装词库::散修联盟": 1,
+    "通用::变焦拍摄": 1,
+    "通用::低调": 1,
+    "单词::of": 2,
+    "单词::often": 1,
+    "单词::today's date": 1,
+    "单词::takes": 1,
+    "单词::take shape": 1,
+    "通用::黑白/单色": 1,
+    "通用::佛光普照": 1,
+    "通用::留白气韵": 1,
+    "古装词库::师尊": 1,
+    "古装词库::\"莫要欺人太甚\"": 2
+  },
+  "enableCombos": true,
+  "comboMaxItems": 60
+}
