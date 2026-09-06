@@ -1,0 +1,11 @@
+{
+  "id": "inflow",
+  "name": "InFlow",
+  "version": "1.0.0",
+  "minAppVersion": "0.15.0",
+  "description": "让词库的灵感流入笔尖——自建词库智能联想补全、场景/角色/对话格式一键插入、场景自动编号、时间戳与悬浮快捷面板。",
+  "author": "MarcBolo",
+  "authorUrl": "https://github.com/your-repo",
+  "isDesktopOnly": true,
+  "icon": "slack"
+}
