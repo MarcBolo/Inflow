@@ -121,9 +121,9 @@ export class TextInserter {
 
   static getOrCreateMirror(el: HTMLElement): HTMLPreElement {
     if (!TextInserter._mirror) {
-      TextInserter._mirror = document.createElement('pre');
-      TextInserter._mirror.style.cssText =
-        'position:fixed;visibility:hidden;white-space:pre-wrap;word-wrap:break-word;z-index:-1;';
+      TextInserter._mirror = document.body.createEl('pre');
+      // 静态测量样式迁移到 styles.css 的 .blfc-text-mirror（position/visibility/white-space/z-index）
+      TextInserter._mirror.className = 'blfc-text-mirror';
       document.body.appendChild(TextInserter._mirror);
     }
     const mirror = TextInserter._mirror;
@@ -173,10 +173,10 @@ export class TextInserter {
     if (!el || typeof el.closest !== 'function') return null;
     // 优先向上找 .cm-editor；找不到时再向下找
     // （Obsidian 中 editor.containerEl 可能是 .cm-editor 的祖先容器）
-    const cmEl = (el.closest('.cm-editor') ||
+    const cmEl = el.closest<HTMLElement>('.cm-editor') ||
       (typeof el.querySelector === 'function'
-        ? el.querySelector('.cm-editor')
-        : null)) as HTMLElement | null;
+        ? el.querySelector<HTMLElement>('.cm-editor')
+        : null);
     if (!cmEl) return null;
     // 1) 官方支持路径：esbuild 将 @codemirror/view 设为 external，运行时由 Obsidian
     //    映射到其内部 CM6 模块；findFromDOM 读取 Obsidian 当前版本的内部标记属性

@@ -191,9 +191,9 @@ export class SimpleScriptCompleter extends Plugin {
     }
 
   async loadSettings(): Promise<void> {
-    const defaultSettings = Object.assign({}, DEFAULT_SETTINGS);
-    const savedData = await this.loadData();
-    this.settings = Object.assign(defaultSettings, savedData);
+    const defaults = Object.assign({}, DEFAULT_SETTINGS);
+    const saved = (await this.loadData()) as Partial<typeof defaults> | null;
+    this.settings = { ...defaults, ...(saved ?? {}) };
   }
 
   async saveSettings(): Promise<void> {
@@ -725,7 +725,6 @@ export class SimpleScriptCompleter extends Plugin {
     this.addCommand({
       id: 'insert-dialogue',
       name: '插入角色对话',
-      hotkeys: [{ modifiers: ['Mod', 'Shift'], key: 'd' }],
       callback: () => {
         const el = document.activeElement as HTMLElement | null;
         if (el && TextInserter.isEditable(el)) {
@@ -760,7 +759,7 @@ export class SimpleScriptCompleter extends Plugin {
         const cm = el ? TextInserter.getCodeMirrorView(el) : null;
         if (cm) {
           const proxy = TextInserter.createCMEditorProxy(cm);
-          this.renumberScenesInCurrentEpisode(proxy);
+          void this.renumberScenesInCurrentEpisode(proxy);
         } else {
           new Notice('场景重编号仅支持 Obsidian 编辑器');
         }
@@ -775,7 +774,7 @@ export class SimpleScriptCompleter extends Plugin {
         const cm = el ? TextInserter.getCodeMirrorView(el) : null;
         if (cm) {
           const proxy = TextInserter.createCMEditorProxy(cm);
-          this.renumberAllScenes(proxy);
+          void this.renumberAllScenes(proxy);
         } else {
           new Notice('场景重编号仅支持 Obsidian 编辑器');
         }
@@ -787,7 +786,7 @@ export class SimpleScriptCompleter extends Plugin {
       id: 'switch-library',
       name: '切换词库',
       callback: () => {
-        this.showLibrarySwitcher();
+        void this.showLibrarySwitcher();
       },
     });
 
@@ -847,10 +846,10 @@ export class SimpleScriptCompleter extends Plugin {
     this.addCommand({
       id: 'create-library-file',
       name: '创建新词库文件',
-      callback: async () => {
+      callback: () => {
         const libraryDir = this.libraryManager.getLibraryDirectory();
         if (libraryDir) {
-          const modal = new LibraryCreationModal(this.app, async (libraryName) => {
+          const createLibraryFile = async (libraryName: string): Promise<void> => {
             if (libraryName && libraryName.trim()) {
               let fileName = `${libraryName.trim()}.md`;
               let filePath = `${libraryDir}/${fileName}`;
@@ -888,16 +887,19 @@ export class SimpleScriptCompleter extends Plugin {
                 await this.app.vault.create(filePath, template);
                 new Notice(`已创建词库文件: ${fileName}`);
 
-              await this.libraryManager.reloadLibraries();
-              await this.libraryManager.setActiveLibrary(libraryName.trim());
-              await this.buildSmartCompletionIndex();
-              this.updateStatusBar();
-              if (this.quickPanel) this.quickPanel.refresh();
+                await this.libraryManager.reloadLibraries();
+                await this.libraryManager.setActiveLibrary(libraryName.trim());
+                await this.buildSmartCompletionIndex();
+                this.updateStatusBar();
+                if (this.quickPanel) this.quickPanel.refresh();
               } catch (e) {
                 console.error('创建词库文件失败:', e);
                 new Notice('创建词库文件失败');
               }
             }
+          };
+          const modal = new LibraryCreationModal(this.app, (name) => {
+            void createLibraryFile(name);
           });
           modal.open();
         } else {
@@ -911,7 +913,7 @@ export class SimpleScriptCompleter extends Plugin {
       id: 'toggle-quick-panel',
       name: '打开词库选择器',
       callback: () => {
-        this.showLibrarySwitcher();
+        void this.showLibrarySwitcher();
       },
     });
 
@@ -960,10 +962,6 @@ export class SimpleScriptCompleter extends Plugin {
     this.addCommand({
       id: 'insert-timestamp',
       name: '插入时间戳 (YYYY-MM-DD-HH:mm)',
-      hotkeys: [
-        { modifiers: ['Mod', 'Shift'], key: ';' },
-        { modifiers: ['Mod', 'Alt'], key: 't' },
-      ],
       callback: () => this.insertTimestampAtCursor(),
     });
 
@@ -979,8 +977,9 @@ export class SimpleScriptCompleter extends Plugin {
         const ts = this.formatTimestamp(new Date());
         try {
           await this.app.fileManager.processFrontMatter(file, (fm) => {
-            if (!fm.created) fm.created = ts;
-            fm.updated = ts;
+            const data = fm as { created?: string; updated?: string };
+            if (!data.created) data.created = ts;
+            data.updated = ts;
           });
           new Notice(`已写入时间戳: ${ts}`);
         } catch (e) {
@@ -1072,22 +1071,21 @@ export class SimpleScriptCompleter extends Plugin {
       return;
     }
 
-    const modal = new LibrarySwitcherModal(
-      this.app,
-      libraries,
-      this.libraryManager.activeLibrary,
-      async (selectedLibrary) => {
-        if (selectedLibrary) {
-          await this.libraryManager.setActiveLibrary(selectedLibrary);
-          await this.buildSmartCompletionIndex();
-          this.updateStatusBar();
-          if (this.quickPanel) this.quickPanel.refresh();
-          new Notice(`已切换到词库: ${selectedLibrary}`);
-        }
-      },
-    );
+    const modal = new LibrarySwitcherModal(this.app, libraries, this.libraryManager.activeLibrary, (selectedLibrary) => {
+      void this.selectLibrary(selectedLibrary);
+    });
 
     modal.open();
+  }
+
+  /** 切库统一流程：置活动词库 → 重建索引 → 刷新状态栏/彩条 → 提示 */
+  private async selectLibrary(name: string | null): Promise<void> {
+    if (!name) return;
+    await this.libraryManager.setActiveLibrary(name);
+    await this.buildSmartCompletionIndex();
+    this.updateStatusBar();
+    if (this.quickPanel) this.quickPanel.refresh();
+    new Notice(`已切换到词库: ${name}`);
   }
 
   // ============ 格式模板：统一插入管线 ============

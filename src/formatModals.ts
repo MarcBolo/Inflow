@@ -88,7 +88,9 @@ export class FormatItemEditModal extends Modal {
       .setName('所属分组')
       .setDesc('该条目出现在哪个分组下（可稍后调整）')
       .addDropdown((d) => {
-        groups.forEach((g) => d.addOption(g.id, g.name));
+        groups.forEach((g) => {
+          d.addOption(g.id, g.name);
+        });
         const cur = groups.some((g) => g.id === this.item.group)
           ? this.item.group
           : groups[0]?.id || '';
@@ -113,8 +115,8 @@ export class FormatItemEditModal extends Modal {
       });
 
     // 实时渲染预览（场景编号以 1.1 示范）
-    const previewWrap = contentEl.createEl('div', { cls: 'blfc-fmt-edit-preview' });
-    previewWrap.createEl('div', {
+    const previewWrap = contentEl.createDiv({ cls: 'blfc-fmt-edit-preview' });
+    previewWrap.createDiv({
       text: '插入效果预览（场景编号以 1.1 示范）：',
       cls: 'blfc-fmt-edit-preview-label',
     });
@@ -129,7 +131,7 @@ export class FormatItemEditModal extends Modal {
       previewBody.textContent = describeRender(r);
     };
     refreshPreview();
-    const textarea = contentEl.querySelector('textarea') as HTMLTextAreaElement | null;
+    const textarea = contentEl.querySelector<HTMLTextAreaElement>('textarea');
     if (textarea) textarea.addEventListener('input', refreshPreview);
 
     new Setting(contentEl)

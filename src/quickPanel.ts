@@ -4,6 +4,7 @@
 import { Notice, setIcon } from 'obsidian';
 import type { SimpleScriptCompleter } from './main';
 import { DEFAULT_LIBRARY_PALETTE } from './constants';
+import { setCssVar } from './dom';
 
 /** lucide 图标名合法字符（仅 ASCII 字母数字与连字符） */
 const ICON_NAME_RE = /^[a-z0-9][a-z0-9-]*$/i;
@@ -14,8 +15,10 @@ const ICON_NAME_RE = /^[a-z0-9][a-z0-9-]*$/i;
  * （SVG 自带的 fill/stroke 颜色会原样渲染）。
  */
 function sanitizeSvg(raw: string): string {
-  const holder = document.createElement('div');
-  holder.innerHTML = raw;
+  // 用 DOMParser 从文本解析（HTML 宽松模式）：不执行脚本、不加载外部资源，
+  // 无需 innerHTML 赋值即可获得可查询的 DOM；清洗后取 body.innerHTML（只读）返回
+  const doc = new DOMParser().parseFromString(raw, 'text/html');
+  const holder = doc.body;
   holder.querySelectorAll('script').forEach((el) => el.remove());
   holder.querySelectorAll('*').forEach((el) => {
     Array.from(el.attributes).forEach((attr) => {
@@ -65,7 +68,7 @@ export class LibraryEdgeStrips {
       this.container.remove();
     }
 
-    this.container = document.createElement('div');
+    this.container = document.body.createDiv();
     this.container.className = 'blfc-edge-strips';
     document.body.appendChild(this.container);
 
@@ -104,6 +107,18 @@ export class LibraryEdgeStrips {
     this.render();
   }
 
+  /**
+   * 原位切换激活条（不重建 DOM）：让激活图标的 scale 放大过渡真实可见。
+   * 遍历现有 .blfc-edge-strip，把激活类移到目标词库；仅供点击切换路径在 render() 前调用。
+   */
+  private activateStrip(libraryName: string): void {
+    if (!this.container) return;
+    this.container.querySelectorAll('.blfc-edge-strip').forEach((el) => {
+      const strip = el as HTMLElement;
+      strip.classList.toggle('blfc-edge-strip-active', strip.getAttribute('data-library') === libraryName);
+    });
+  }
+
   /** 渲染全部彩条 */
   private render(): void {
     if (!this.container) return;
@@ -111,12 +126,12 @@ export class LibraryEdgeStrips {
     const libraries = this.plugin.libraryManager.getAvailableLibraries();
     this.container.empty();
 
-    // 空态：无词库直接隐藏整个容器
+    // 空态：无词库直接隐藏整个容器（blfc-hidden 类的样式在 styles.css）
     if (libraries.length === 0) {
-      this.container.style.display = 'none';
+      this.container.addClass('blfc-hidden');
       return;
     }
-    this.container.style.display = '';
+    this.container.removeClass('blfc-hidden');
 
     const activeLibrary = this.plugin.libraryManager.activeLibrary;
     const colors = this.plugin.settings.libraryColors;
@@ -132,9 +147,10 @@ export class LibraryEdgeStrips {
         void this.plugin.saveSettings();
       }
 
-      const strip = document.createElement('div');
+      const strip = this.container!.createDiv();
       strip.className = 'blfc-edge-strip';
-      strip.style.backgroundColor = color;
+      // 词库色经 CSS 变量写入（styles.css 的 background/color 消费），不写内联颜色
+      setCssVar(strip, '--blfc-strip-bg', color);
       if (libraryName === activeLibrary) {
         strip.classList.add('blfc-edge-strip-active');
       }
@@ -142,13 +158,15 @@ export class LibraryEdgeStrips {
       // 图标：仅当设置了值才显示（空 = 纯色彩条）
       const rawIcon = (this.plugin.settings.libraryIcons?.[libraryName] ?? '').trim();
       if (rawIcon) {
-        const iconEl = document.createElement('span');
+        // 图标先挂到彩条内构建；解析失败时移除（同一渲染帧内完成，无视觉闪动）
+        const iconEl = strip.createSpan();
         iconEl.className = 'blfc-edge-strip-icon';
         let iconOk = false;
         if (rawIcon.toLowerCase().startsWith('<svg')) {
-          iconEl.innerHTML = sanitizeSvg(rawIcon);
-          // SVG 自带 fill/stroke 优先；缺省 currentColor 时回退到词库色
-          iconEl.style.color = color;
+          // 清洗后的 SVG 字符串经 DOMParser 转 DOM 节点插入（避免 innerHTML 直写）
+          const parsed = new DOMParser().parseFromString(sanitizeSvg(rawIcon), 'text/html');
+          Array.from(parsed.body.childNodes).forEach((n) => iconEl.appendChild(n));
+          // SVG 自带 fill/stroke 优先；缺省 currentColor 的路径回退到词库色（经 CSS 变量继承）
           iconOk = true;
         } else if (ICON_NAME_RE.test(rawIcon)) {
           try {
@@ -159,19 +177,17 @@ export class LibraryEdgeStrips {
           // setIcon 是一次性渲染：CI-* 等第三方图标若来源插件尚未加载，
           // 这里不会产出 svg。此时不丢弃，记录待重试（不阻塞本次渲染）。
           iconOk = !!iconEl.querySelector('svg');
-          // 纯图标形态：单色（lucide）图标用词库色上色，保证在主题背景上可见
-          if (iconOk) iconEl.style.color = color;
+          // 纯图标形态：单色（lucide）图标用词库色上色（CSS 变量继承），保证在主题背景上可见
         } else {
           // emoji / 其他文本（保留自身颜色）
           iconEl.textContent = rawIcon;
           iconOk = true;
         }
         if (iconOk) {
-          strip.appendChild(iconEl);
-          // 有图标 = 纯图标形态：去掉彩条底色，只显示图标
+          // 有图标 = 纯图标形态：去掉彩条底色（.blfc-icon-only 的 background 由 styles.css 控制）
           strip.classList.add('blfc-icon-only');
-          strip.style.backgroundColor = '';
         } else {
+          iconEl.remove();
           pendingNames.push(`${libraryName} → ${rawIcon}`);
         }
       }
@@ -179,6 +195,7 @@ export class LibraryEdgeStrips {
       const info = this.plugin.libraryManager.getLibraryInfo(libraryName);
       const count = info ? info.itemCount : 0;
       strip.title = `${libraryName}（${count} 条）`;
+      strip.setAttribute('data-library', libraryName);
       strip.setAttribute('role', 'button');
       strip.setAttribute('aria-label', `切换到词库 ${libraryName}`);
       strip.tabIndex = 0;
@@ -189,11 +206,17 @@ export class LibraryEdgeStrips {
         if (!ok) return;
         await this.plugin.buildSmartCompletionIndex();
         this.plugin.updateStatusBar();
-        this.render();
+        // 先原位交换激活类让放大过渡（transform）可见，动画结束后再全量重建（图标重试等保持一致）
+        this.activateStrip(libraryName);
+        window.setTimeout(() => {
+          if (this.container) this.render();
+        }, 180);
         new Notice(`已切换到词库: ${libraryName}`);
       };
 
-      strip.addEventListener('click', activate);
+      strip.addEventListener('click', () => {
+        void activate();
+      });
       strip.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
@@ -246,7 +269,7 @@ export class LibraryEdgeStrips {
     }).rootSplit;
     const rootEl = root?.containerEl;
     if (rootEl) return rootEl;
-    return document.querySelector('.workspace-split.mod-root') as HTMLElement | null;
+    return document.querySelector<HTMLElement>('.workspace-split.mod-root');
   }
 
   /**
@@ -282,6 +305,7 @@ export class LibraryEdgeStrips {
     const rootEl = this.getRootElement();
     const rect = rootEl?.getBoundingClientRect();
     const left = rect ? Math.max(0, rect.left) : 0;
-    this.container.style.left = `${left}px`;
+    // 左侧偏移经 CSS 变量写入（.blfc-edge-strips 的 left 消费），不写内联样式
+    setCssVar(this.container, '--blfc-strips-left', `${left}px`);
   }
 }

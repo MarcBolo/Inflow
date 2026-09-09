@@ -94,13 +94,13 @@ class DirectCommandModal extends Modal {
     nameInput.addEventListener('input', () => {
       this.name = nameInput.value;
     });
-    contentEl.createEl('div', { text: '打开以下分组：', cls: 'blfc-fmt-edit-preview-label' });
-    const listEl = contentEl.createEl('div', { cls: 'blfc-fmt-group-pick' });
+    contentEl.createDiv({ text: '打开以下分组：', cls: 'blfc-fmt-edit-preview-label' });
+    const listEl = contentEl.createDiv({ cls: 'blfc-fmt-group-pick' });
     this.groups.forEach((g) => {
       const label = listEl.createEl('label', { cls: 'blfc-fmt-group-pick-item' });
       const cb = label.createEl('input', { type: 'checkbox' });
       cb.checked = this.picked.has(g.id);
-      label.createEl('span', { text: g.name });
+      label.createSpan({ text: g.name });
       cb.addEventListener('change', () => {
         if (cb.checked) this.picked.add(g.id);
         else this.picked.delete(g.id);
@@ -207,7 +207,7 @@ export class SimpleScriptSettingTab extends PluginSettingTab {
     }
 
     // ========== 第一部分：基本设置 ==========
-    containerEl.createEl('h3', { text: '基本设置' });
+    new Setting(containerEl).setName('基本设置').setHeading();
 
     new Setting(containerEl)
       .setName('启用插件')
@@ -230,7 +230,7 @@ export class SimpleScriptSettingTab extends PluginSettingTab {
       );
 
     // ========== 第二部分：智能补全设置 ==========
-    containerEl.createEl('h3', { text: '智能补全' });
+    new Setting(containerEl).setName('智能补全').setHeading();
 
     new Setting(containerEl)
       .setName('启用智能补全')
@@ -303,7 +303,7 @@ export class SimpleScriptSettingTab extends PluginSettingTab {
       );
 
     // ========== 组合建议设置 ==========
-    containerEl.createEl('h3', { text: '组合建议' });
+    new Setting(containerEl).setName('组合建议').setHeading();
 
     new Setting(containerEl)
       .setName('启用场景/对话组合建议')
@@ -330,7 +330,7 @@ export class SimpleScriptSettingTab extends PluginSettingTab {
       );
 
     // ========== 第三部分：快捷悬浮面板设置 ==========
-    containerEl.createEl('h3', { text: '快捷悬浮面板' });
+    new Setting(containerEl).setName('快捷悬浮面板').setHeading();
 
     new Setting(containerEl)
       .setName('启用快捷悬浮面板')
@@ -372,7 +372,7 @@ export class SimpleScriptSettingTab extends PluginSettingTab {
       );
 
     // ========== 格式模板（数据驱动，formats.json） ==========
-    this.formatsArea = containerEl.createEl('div', { cls: 'blfc-fmt-area' });
+    this.formatsArea = containerEl.createDiv({ cls: 'blfc-fmt-area' });
     this.renderFormatsArea();
 
     // ========== 第四部分：词库管理（配置主区；词库列表在二级页） ==========
@@ -382,7 +382,7 @@ export class SimpleScriptSettingTab extends PluginSettingTab {
     this.renderReferenceOverview();
 
     // ========== 第六部分：调试 ==========
-    containerEl.createEl('h3', { text: '调试' });
+    new Setting(containerEl).setName('调试').setHeading();
 
     new Setting(containerEl)
       .setName('测试功能')
@@ -430,8 +430,8 @@ export class SimpleScriptSettingTab extends PluginSettingTab {
     const file = fm.file;
 
     // —— 标题栏：格式模板 + 新增 ——
-    const header = area.createEl('div', { cls: 'blfc-fmt-header' });
-    header.createEl('span', { text: '格式模板', cls: 'blfc-fmt-title' });
+    const header = area.createDiv({ cls: 'blfc-fmt-header' });
+    header.createSpan({ text: '格式模板', cls: 'blfc-fmt-title' });
     const addBtn = header.createEl('button', {
       text: '新增',
       cls: 'blfc-fmt-add-btn',
@@ -454,7 +454,7 @@ export class SimpleScriptSettingTab extends PluginSettingTab {
     });
 
     // —— 入口：默认触发符 + 常驻命令 ——
-    const entryRow = area.createEl('div', { cls: 'blfc-fmt-entry' });
+    const entryRow = area.createDiv({ cls: 'blfc-fmt-entry' });
     entryRow.createEl('label', { text: '默认触发符', cls: 'blfc-fmt-entry-label' });
     const chInput = entryRow.createEl('input', {
       type: 'text',
@@ -468,14 +468,14 @@ export class SimpleScriptSettingTab extends PluginSettingTab {
       if (e.key === 'Enter') this.commitTriggerChar(chInput.value);
     });
     chInput.addEventListener('blur', () => this.commitTriggerChar(chInput.value));
-    entryRow.createEl('span', {
+    entryRow.createSpan({
       text: '输入后弹出模板菜单；可为某分组单独设专属触发符（在其管理界面里）。',
       cls: 'blfc-fmt-hint',
     });
 
     // —— 分组概览（每行一行；管理在二级弹窗） ——
     if (file.groups.length === 0) {
-      area.createEl('div', { text: '暂无分组，点右上角「新增」开始。', cls: 'blfc-fmt-empty' });
+      area.createDiv({ text: '暂无分组，点右上角「新增」开始。', cls: 'blfc-fmt-empty' });
     } else {
       file.groups.forEach((g) => this.renderGroupRow(area, g.id));
     }
@@ -483,7 +483,7 @@ export class SimpleScriptSettingTab extends PluginSettingTab {
     // —— 高级（折叠） ——
     const adv = area.createEl('details', { cls: 'blfc-fmt-advanced' });
     adv.createEl('summary', { text: '高级：导出 / 导入' });
-    const advRow = adv.createEl('div', { cls: 'blfc-fmt-tools' });
+    const advRow = adv.createDiv({ cls: 'blfc-fmt-tools' });
     const mkAdv = (text: string, onClick: () => void): HTMLButtonElement => {
       const b = advRow.createEl('button', { text, cls: 'blfc-fmt-btn' });
       b.addEventListener('click', onClick);
@@ -499,10 +499,10 @@ export class SimpleScriptSettingTab extends PluginSettingTab {
     const group = fm.groupById(groupId);
     if (!group) return;
     const count = fm.file.items.filter((i) => i.group === groupId).length;
-    const row = area.createEl('div', { cls: 'blfc-fmt-group-row' });
-    const main = row.createEl('div', { cls: 'blfc-fmt-group-row-main' });
-    main.createEl('span', { text: group.name, cls: 'blfc-fmt-group-row-name' });
-    main.createEl('span', {
+    const row = area.createDiv({ cls: 'blfc-fmt-group-row' });
+    const main = row.createDiv({ cls: 'blfc-fmt-group-row-main' });
+    main.createSpan({ text: group.name, cls: 'blfc-fmt-group-row-name' });
+    main.createSpan({
       text: `${count}条 · 触发 ${group.trigger ?? fm.triggerChar}`,
       cls: 'blfc-fmt-group-row-meta',
     });
@@ -555,15 +555,17 @@ export class SimpleScriptSettingTab extends PluginSettingTab {
     containerEl.addClass('blfc-plugin');
 
     // 顶部返回栏
-    const nav = containerEl.createEl('div', { cls: 'blfc-fmt-subnav' });
+    const nav = containerEl.createDiv({ cls: 'blfc-fmt-subnav' });
     const backBtn = nav.createEl('button', { text: '返回', cls: 'blfc-fmt-btn' });
     backBtn.addEventListener('click', () => this.backToOverview());
-    nav.createEl('span', { text: '格式模板', cls: 'blfc-fmt-subnav-crumb' });
+    nav.createSpan({ text: '格式模板', cls: 'blfc-fmt-subnav-crumb' });
 
-    const headTitle = containerEl.createEl('h3', { text: `${group.name} · 分组设置` });
+    const groupTitle = new Setting(containerEl)
+      .setName(`${group.name} · 分组设置`)
+      .setHeading();
 
     // —— 专属触发符 ——
-    const triggerRow = containerEl.createEl('div', { cls: 'blfc-fmt-entry' });
+    const triggerRow = containerEl.createDiv({ cls: 'blfc-fmt-entry' });
     triggerRow.createEl('label', { text: '专属触发符', cls: 'blfc-fmt-entry-label' });
     const trigInput = triggerRow.createEl('input', {
       type: 'text',
@@ -605,7 +607,7 @@ export class SimpleScriptSettingTab extends PluginSettingTab {
       if (e.key === 'Enter') commitTrig(trigInput.value);
     });
     trigInput.addEventListener('blur', () => commitTrig(trigInput.value));
-    containerEl.createEl('div', {
+    containerEl.createDiv({
       text: '空 = 跟随全局默认；多组可用同一触发符（合并弹出）；不同触发符禁止互为前缀（如 @ 与 @@）。',
       cls: 'blfc-fmt-hint',
     });
@@ -613,9 +615,8 @@ export class SimpleScriptSettingTab extends PluginSettingTab {
     // —— 改名 ——
     const renameBtn = containerEl.createEl('button', {
       text: '重命名分组…',
-      cls: 'blfc-fmt-btn',
+      cls: 'blfc-fmt-btn blfc-fmt-btn-ren',
     });
-    renameBtn.style.margin = '8px 0';
     renameBtn.addEventListener('click', () => {
       new SimpleTextModal(this.app, '重命名分组', '分组名', group.name, (name) => {
         void fm.mutate((d) => {
@@ -623,22 +624,22 @@ export class SimpleScriptSettingTab extends PluginSettingTab {
           if (g) g.name = name;
           return null;
         });
-        headTitle.textContent = `${name.trim()} · 分组设置`;
+        groupTitle.setName(`${name.trim()} · 分组设置`);
       }).open();
     });
 
     // —— 直达命令（本组绑定关系，槽位全局共享） ——
-    containerEl.createEl('div', { cls: 'blfc-fmt-subhead' }).textContent = '直达命令';
-    containerEl.createEl('div', {
+    containerEl.createDiv({ cls: 'blfc-fmt-subhead' }).textContent = '直达命令';
+    containerEl.createDiv({
       text: '勾选 = 本组由该命令弹出。命令可绑定多个分组；需重载插件后命令才出现在命令面板 / 快捷键里。',
       cls: 'blfc-fmt-hint',
     });
-    const quickBox = containerEl.createEl('div', { cls: 'blfc-fmt-qc-box' });
+    const quickBox = containerEl.createDiv({ cls: 'blfc-fmt-qc-box' });
     const reRenderQuick = () => {
       quickBox.empty();
       const qcs = [...fm.file.quickCommands].sort((a, b) => a.slot - b.slot);
       if (qcs.length === 0) {
-        quickBox.createEl('div', { text: '还没有直达命令，点下方「+ 添加」创建。', cls: 'blfc-fmt-empty' });
+        quickBox.createDiv({ text: '还没有直达命令，点下方「+ 添加」创建。', cls: 'blfc-fmt-empty' });
       }
       qcs.forEach((q) => {
         const row = quickBox.createEl('label', { cls: 'blfc-fmt-qc-row' });
@@ -658,9 +659,9 @@ export class SimpleScriptSettingTab extends PluginSettingTab {
           new Notice(cb.checked ? '已绑定本组' : '已解除本组');
           reRenderQuick();
         });
-        row.createEl('span', { text: `直达 ${q.slot} · ${q.name}`, cls: 'blfc-fmt-qc-name' });
+        row.createSpan({ text: `直达 ${q.slot} · ${q.name}`, cls: 'blfc-fmt-qc-name' });
         const bound = q.groupIds.length;
-        row.createEl('span', { text: `已绑 ${bound} 组`, cls: 'blfc-fmt-count' });
+        row.createSpan({ text: `已绑 ${bound} 组`, cls: 'blfc-fmt-count' });
         const del = row.createEl('button', { text: '✕', title: '删除该直达命令（解除所有分组绑定）', cls: 'blfc-fmt-btn' });
         del.addEventListener('click', (ev) => {
           ev.preventDefault();
@@ -711,22 +712,21 @@ export class SimpleScriptSettingTab extends PluginSettingTab {
     reRenderQuick();
 
     // —— 条目 ——
-    containerEl.createEl('div', { cls: 'blfc-fmt-subhead' }).textContent = '模板条目';
-    const itemsBox = containerEl.createEl('div', { cls: 'blfc-fmt-items' });
+    containerEl.createDiv({ cls: 'blfc-fmt-subhead' }).textContent = '模板条目';
+    const itemsBox = containerEl.createDiv({ cls: 'blfc-fmt-items' });
     const addBtn = containerEl.createEl('button', {
       text: '+ 添加模板到本组',
-      cls: 'blfc-fmt-btn',
+      cls: 'blfc-fmt-btn blfc-fmt-btn-add',
     });
-    addBtn.style.margin = '6px 0 10px';
 
     const reRenderItems = () => {
       itemsBox.empty();
       const items = fm.file.items.filter((i) => i.group === groupId);
       if (items.length === 0) {
-        itemsBox.createEl('div', { text: '（空组）', cls: 'blfc-fmt-empty' });
+        itemsBox.createDiv({ text: '（空组）', cls: 'blfc-fmt-empty' });
       }
       items.forEach((item, rowIdx) => {
-        const row = itemsBox.createEl('div', { cls: 'blfc-fmt-item-row' });
+        const row = itemsBox.createDiv({ cls: 'blfc-fmt-item-row' });
         const nameBtn = row.createEl('button', {
           text: item.name,
           title: '点击编辑',
@@ -744,7 +744,7 @@ export class SimpleScriptSettingTab extends PluginSettingTab {
         };
         nameBtn.addEventListener('click', openEdit);
         const text = item.text;
-        row.createEl('span', {
+        row.createSpan({
           text: text.length > 52 ? `${text.slice(0, 52)}…` : text,
           title: text,
           cls: 'blfc-fmt-item-tpl',
@@ -816,10 +816,8 @@ export class SimpleScriptSettingTab extends PluginSettingTab {
     // —— 删除分组（页尾） ——
     const delBtn = containerEl.createEl('button', {
       text: '删除该分组及组内模板',
-      cls: 'blfc-fmt-btn',
+      cls: 'blfc-fmt-btn blfc-fmt-btn-danger',
     });
-    delBtn.style.marginTop = '14px';
-    delBtn.style.color = 'var(--text-error)';
     delBtn.addEventListener('click', () => {
       const count = fm.file.items.filter((i) => i.group === groupId).length;
       new ConfirmModal(
@@ -878,11 +876,11 @@ export class SimpleScriptSettingTab extends PluginSettingTab {
   /** 主区渲染：词库参考卡片——标题栏（词库格式说明入口）+ 一句话描述 */
   private renderReferenceOverview(): void {
     const { containerEl } = this;
-    const area = containerEl.createEl('div', { cls: 'blfc-lib-area' });
+    const area = containerEl.createDiv({ cls: 'blfc-lib-area' });
 
     // —— 标题栏：词库参考 + 进入二级页入口 ——
-    const header = area.createEl('div', { cls: 'blfc-lib-header' });
-    header.createEl('span', { text: '词库参考', cls: 'blfc-lib-title' });
+    const header = area.createDiv({ cls: 'blfc-lib-header' });
+    header.createSpan({ text: '词库参考', cls: 'blfc-lib-title' });
     const viewBtn = header.createEl('button', {
       text: '查看 ›',
       title: '词库文件的格式说明',
@@ -891,9 +889,8 @@ export class SimpleScriptSettingTab extends PluginSettingTab {
     viewBtn.addEventListener('click', () => this.goToReference());
 
     // —— 一句话描述（点标题栏右侧入口进入完整说明） ——
-    const descRow = area.createEl('div', { cls: 'blfc-fmt-entry' });
-    descRow.style.padding = '2px 8px 4px';
-    descRow.createEl('span', {
+    const descRow = area.createDiv({ cls: 'blfc-fmt-entry' });
+    descRow.createSpan({
       text: '词库文件（.md）的书写格式：章节标题、词条分隔（显示|插入|描述）、列表标记与 YAML 元数据。',
       cls: 'blfc-fmt-hint',
     });
@@ -906,21 +903,21 @@ export class SimpleScriptSettingTab extends PluginSettingTab {
     containerEl.addClass('blfc-plugin');
 
     // 顶部返回栏
-    const nav = containerEl.createEl('div', { cls: 'blfc-fmt-subnav' });
+    const nav = containerEl.createDiv({ cls: 'blfc-fmt-subnav' });
     const backBtn = nav.createEl('button', { text: '返回', cls: 'blfc-fmt-btn' });
     backBtn.addEventListener('click', () => this.backToOverview());
-    nav.createEl('span', { text: '词库参考', cls: 'blfc-fmt-subnav-crumb' });
-    nav.createEl('span', { text: '› 词库格式说明', cls: 'blfc-fmt-subnav-crumb' });
+    nav.createSpan({ text: '词库参考', cls: 'blfc-fmt-subnav-crumb' });
+    nav.createSpan({ text: '› 词库格式说明', cls: 'blfc-fmt-subnav-crumb' });
 
-    containerEl.createEl('h3', { text: '词库格式说明' });
-    containerEl.createEl('div', {
+    new Setting(containerEl).setName('词库格式说明').setHeading();
+    containerEl.createDiv({
       text: '词库是一个普通 Markdown 文件：一级标题为词库名，二级标题为类别（可自由命名），类别下逐行写词条。',
       cls: 'blfc-fmt-hint',
     });
 
-    const doc = containerEl.createEl('div', { cls: 'blfc-ref-doc' });
+    const doc = containerEl.createDiv({ cls: 'blfc-ref-doc' });
 
-    doc.createEl('h4', { text: '词库文件格式：' });
+    new Setting(doc).setName('词库文件格式：').setHeading();
     doc.createEl('pre').createEl('code', {
       text: `# 我的词库
 
@@ -937,17 +934,22 @@ happy|happy|快乐的
 sad|sad|悲伤的`,
     });
 
-    doc.createEl('h4', { text: '格式说明：' });
+    new Setting(doc).setName('格式说明：').setHeading();
     const ul = doc.createEl('ul');
-    const addLi = (html: string): void => {
-      ul.createEl('li').innerHTML = html;
+    type LiPart = string | { tag: 'strong' | 'code'; text: string };
+    const addRich = (parts: LiPart[]): void => {
+      const li = ul.createEl('li');
+      parts.forEach((p) => {
+        if (typeof p === 'string') li.append(p);
+        else li.createEl(p.tag, { text: p.text });
+      });
     };
-    addLi('<strong>简单格式：</strong><code>词条</code>（显示与插入文本相同）');
-    addLi('<strong>增强格式：</strong><code>显示文本|插入文本</code>');
-    addLi('<strong>带描述：</strong><code>显示文本|插入文本|描述</code>（描述可选，仅提示用）');
-    addLi('支持列表标记（<code>-</code> 或 <code>*</code>）开头');
-    addLi('支持 YAML 元数据（文件开头用 <code>---</code> 包裹）');
-    addLi('类别（<code>##</code>）可自由命名；<code>###</code> 三级标题归入最近一个二级类别，不另起类别');
+    addRich([{ tag: 'strong', text: '简单格式：' }, { tag: 'code', text: '词条' }, '（显示与插入文本相同）']);
+    addRich([{ tag: 'strong', text: '增强格式：' }, { tag: 'code', text: '显示文本|插入文本' }]);
+    addRich([{ tag: 'strong', text: '带描述：' }, { tag: 'code', text: '显示文本|插入文本|描述' }, '（描述可选，仅提示用）']);
+    addRich(['支持列表标记（', { tag: 'code', text: '-' }, ' 或 ', { tag: 'code', text: '*' }, '）开头']);
+    addRich(['支持 YAML 元数据（文件开头用 ', { tag: 'code', text: '---' }, ' 包裹）']);
+    addRich(['类别（', { tag: 'code', text: '##' }, '）可自由命名；', { tag: 'code', text: '###' }, ' 三级标题归入最近一个二级类别，不另起类别']);
   }
 
   // ========== 词库管理：主区（配置卡片）+ 二级页（词库列表） ==========
@@ -955,11 +957,11 @@ sad|sad|悲伤的`,
   /** 主区渲染：词库管理卡片——标题栏（词库列表入口）+ 词库文件夹路径设置（含刷新按钮） */
   private renderLibraryOverview(): void {
     const { containerEl } = this;
-    const area = containerEl.createEl('div', { cls: 'blfc-lib-area' });
+    const area = containerEl.createDiv({ cls: 'blfc-lib-area' });
 
     // —— 标题栏：词库管理 + 词库列表入口（二级页） ——
-    const header = area.createEl('div', { cls: 'blfc-lib-header' });
-    header.createEl('span', { text: '词库管理', cls: 'blfc-lib-title' });
+    const header = area.createDiv({ cls: 'blfc-lib-header' });
+    header.createSpan({ text: '词库管理', cls: 'blfc-lib-title' });
     const listBtn = header.createEl('button', {
       text: '词库列表 ›',
       title: '查看全部词库并切换当前词库',
@@ -968,7 +970,7 @@ sad|sad|悲伤的`,
     listBtn.addEventListener('click', () => this.goToLibraryList());
 
     // —— 词库文件夹：路径输入 + 刷新按钮 ——
-    const folderItem = area.createEl('div', { cls: 'blfc-lib-folder-line' });
+    const folderItem = area.createDiv({ cls: 'blfc-lib-folder-line' });
     folderItem.createEl('label', { text: '词库文件夹', cls: 'blfc-lib-config-label' });
     const folderInput = folderItem.createEl('input', {
       type: 'text',
@@ -976,20 +978,24 @@ sad|sad|悲伤的`,
       cls: 'blfc-lib-folder-input',
     });
     folderInput.value = this.plugin.settings.libraryFolder || '';
-    folderInput.addEventListener('change', async () => {
+    folderInput.addEventListener('change', () => {
       this.plugin.settings.libraryFolder = folderInput.value.trim();
-      await this.plugin.saveSettings();
-      await this.plugin.libraryManager.loadLibraries();
-      this.renderLibraryTable();
+      void (async () => {
+        await this.plugin.saveSettings();
+        await this.plugin.libraryManager.loadLibraries();
+        this.renderLibraryTable();
+      })();
     });
     const refreshBtn = folderItem.createEl('button', {
       text: '刷新',
       cls: 'blfc-lib-refresh-btn',
     });
-    refreshBtn.addEventListener('click', async () => {
-      await this.plugin.libraryManager.reloadLibraries();
-      new Notice('词库已刷新');
-      this.renderLibraryTable();
+    refreshBtn.addEventListener('click', () => {
+      void (async () => {
+        await this.plugin.libraryManager.reloadLibraries();
+        new Notice('词库已刷新');
+        this.renderLibraryTable();
+      })();
     });
   }
 
@@ -1000,19 +1006,19 @@ sad|sad|悲伤的`,
     containerEl.addClass('blfc-plugin');
 
     // 顶部返回栏
-    const nav = containerEl.createEl('div', { cls: 'blfc-fmt-subnav' });
+    const nav = containerEl.createDiv({ cls: 'blfc-fmt-subnav' });
     const backBtn = nav.createEl('button', { text: '返回', cls: 'blfc-fmt-btn' });
     backBtn.addEventListener('click', () => this.backToOverview());
-    nav.createEl('span', { text: '词库管理', cls: 'blfc-fmt-subnav-crumb' });
-    nav.createEl('span', { text: '› 词库列表', cls: 'blfc-fmt-subnav-crumb' });
+    nav.createSpan({ text: '词库管理', cls: 'blfc-fmt-subnav-crumb' });
+    nav.createSpan({ text: '› 词库列表', cls: 'blfc-fmt-subnav-crumb' });
 
-    containerEl.createEl('h3', { text: '词库列表' });
-    containerEl.createEl('div', {
+    new Setting(containerEl).setName('词库列表').setHeading();
+    containerEl.createDiv({
       text: '点击词库行可切换当前词库；● = 当前使用。',
       cls: 'blfc-fmt-hint',
     });
 
-    this.libraryTableContainer = containerEl.createEl('div', { cls: 'blfc-lib-table-wrap' });
+    this.libraryTableContainer = containerEl.createDiv({ cls: 'blfc-lib-table-wrap' });
     this.renderLibraryTable();
   }
 
@@ -1050,13 +1056,15 @@ sad|sad|悲伤的`,
 
       const tr = tbody.createEl('tr', { cls: 'blfc-lib-row' });
       if (isActive) tr.addClass('blfc-row-active');
-      tr.addEventListener('click', async () => {
-        const ok = await this.plugin.libraryManager.setActiveLibrary(libraryName);
-        if (!ok) return;
-        await this.plugin.buildSmartCompletionIndex();
-        this.plugin.updateStatusBar();
-        if (this.plugin.quickPanel) this.plugin.quickPanel.refresh();
-        this.renderLibraryTable();
+      tr.addEventListener('click', () => {
+        void (async () => {
+          const ok = await this.plugin.libraryManager.setActiveLibrary(libraryName);
+          if (!ok) return;
+          await this.plugin.buildSmartCompletionIndex();
+          this.plugin.updateStatusBar();
+          if (this.plugin.quickPanel) this.plugin.quickPanel.refresh();
+          this.renderLibraryTable();
+        })();
       });
 
       tr.createEl('td', { text: libraryName, cls: 'blfc-col-name' });
@@ -1110,13 +1118,16 @@ sad|sad|悲伤的`,
           iconInput.title = '';
           return;
         }
-        const probe = document.createElement('span');
+        // 探测 span 挂 body 后立即移除（同步任务内完成，无视觉闪动）
+        const probe = document.body.createSpan();
         try {
           setIcon(probe, v);
         } catch (e) {
           void e;
         }
-        if (probe.querySelector('svg')) {
+        const ok = !!probe.querySelector('svg');
+        probe.remove();
+        if (ok) {
           iconInput.classList.remove('blfc-lib-icon-err');
           iconInput.title = '';
         } else {
@@ -1126,7 +1137,7 @@ sad|sad|悲伤的`,
       });
 
       const tdCurrent = tr.createEl('td', { cls: 'blfc-col-center' });
-      tdCurrent.createEl('span', {
+      tdCurrent.createSpan({
         text: isActive ? '●' : '○',
         cls: isActive ? 'blfc-dot-on' : 'blfc-dot-off',
       });

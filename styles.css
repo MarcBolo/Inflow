@@ -1,0 +1,1138 @@
+/* ========== 词库彩条样式（贴编辑器左边缘） ========== */
+/* 彩条容器：固定定位，垂直居中于编辑器左边缘；容器本身不拦截点击 */
+.blfc-edge-strips {
+    position: fixed;
+    top: 50%;
+    transform: translateY(-50%);
+    /* 左侧偏移由 JS 经 --blfc-strips-left 写入（setCssProps），避免内联 left */
+    left: var(--blfc-strips-left, 0px);
+    /* 层级遵循 Obsidian 官方层级体系：压在编辑器之上、模态窗口（--layer-modal=50）之下 */
+    z-index: calc(var(--layer-modal, 50) - 1);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 4px 0;
+    align-items: flex-start;
+    pointer-events: none;
+}
+
+/* 空态（无词库）：整个容器隐藏 —— JS 切换 blfc-hidden 类，替代内联 display:none */
+.blfc-edge-strips.blfc-hidden {
+    display: none;
+}
+
+/* 单条彩带：默认宽 21px（7px×3） */
+.blfc-edge-strip {
+    width: 21px;
+    height: 34px;
+    border-radius: 0 4px 4px 0;
+    /* 底色 = 词库色：JS 经 --blfc-strip-bg 写入（setCssProps），未设时回退强调色 */
+    background: var(--blfc-strip-bg, var(--interactive-accent));
+    cursor: pointer;
+    pointer-events: auto;
+    transition: width 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+    outline: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* 彩条上的图标：着色继承所在彩条写入的 --blfc-strip-bg（词库色）；
+   自带 fill/stroke 的彩色 SVG 与 emoji 由自身表现，不受此影响。
+   激活放大走 transform:scale —— 不经 font-size / svg 宽高，避免被主题或
+   lucide .svg-icon 的尺寸规则约束，且可用 transition 平滑过渡 */
+.blfc-edge-strip-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--blfc-strip-bg, inherit);
+    font-size: 14px;
+    line-height: 1;
+    max-width: 20px;
+    overflow: hidden;
+    white-space: nowrap;
+    pointer-events: none;
+    transform-origin: center;
+    transition: transform 0.15s ease;
+}
+
+.blfc-edge-strip-icon svg {
+    width: 16px;
+    height: 16px;
+    pointer-events: none;
+}
+
+/* 图标独占形态：有图标的词库不再显示彩条底色，只显示图标
+   （图标颜色由 JS 按 词库色/lucide 上色，emoji 与彩色 SVG 保留自带色） */
+.blfc-edge-strip.blfc-icon-only {
+    background: transparent !important;
+}
+
+.blfc-edge-strip:hover {
+    filter: brightness(1.1);
+}
+
+.blfc-edge-strip:focus-visible {
+    box-shadow: 0 0 0 2px var(--background-primary), 0 0 0 4px var(--interactive-accent);
+}
+
+/* 当前激活词库：图标放大 1.5×（14px→≈21px、16px→≈24px，与原定版「放大 50%」一致）。
+   用 transform 实现，任何 svg/.svg-icon 尺寸规则都无法压制；
+   放大后的绘制不被 20px 的普通态盒子裁剪，需同步放开 overflow/max-width */
+.blfc-edge-strip-active .blfc-edge-strip-icon {
+    transform: scale(1.5);
+    overflow: visible;
+    max-width: 30px;
+}
+
+.blfc-edge-strip-active.blfc-icon-only {
+    background: transparent !important;
+}
+
+/* 注：激活放大仅用上方 transform:scale(1.5)，不再改 font-size / svg 宽高
+   （16px svg ×1.5 = 24px 视觉，与原定版一致），以免叠加出错误尺寸 */
+
+/* ========== 设置页面样式（插件命名空间内生效） ========== */
+/* 只影响插件设置页 */
+.blfc-plugin .setting-item-description ul {
+    margin: 10px 0;
+    padding-left: 20px;
+}
+
+.blfc-plugin .setting-item-description li {
+    margin-bottom: 6px;
+    line-height: 1.4;
+}
+
+.blfc-plugin .setting-item-description code,
+.blfc-plugin .setting-item-description kbd {
+    background-color: var(--background-secondary);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: monospace;
+    font-size: 13px;
+    border: 1px solid var(--background-modifier-border);
+}
+
+.blfc-plugin .setting-item-description kbd {
+    box-shadow: none !important;
+    margin: 0 2px;
+}
+
+.blfc-plugin .setting-item-description p {
+    margin: 8px 0;
+}
+
+.blfc-plugin .setting-item-description pre {
+    background-color: var(--background-secondary);
+    padding: 10px;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 12px;
+    overflow-x: auto;
+    margin: 10px 0;
+    border: 1px solid var(--background-modifier-border);
+}
+
+.blfc-plugin .setting-item-description pre code {
+    background-color: transparent;
+    padding: 0;
+    border: none;
+    font-size: 12px;
+}
+
+.blfc-plugin .setting-item-description h4 {
+    margin-top: 15px;
+    margin-bottom: 8px;
+    color: var(--text-accent);
+}
+
+/* 设置项中的文本区域 */
+.blfc-plugin .setting-item-control textarea {
+    width: 100%;
+    min-height: 120px;
+    font-family: monospace;
+    font-size: 13px;
+    line-height: 1.4;
+    margin-top: 8px;
+    resize: vertical;
+    border-radius: 25px;
+}
+
+/* 设置项布局 - 优化 */
+.blfc-plugin .setting-item {
+    flex-direction: row;
+    align-items: center;
+    padding: 8px 12px !important;
+    border-top: none !important;
+}
+
+.blfc-plugin .setting-item .setting-item-info {
+    flex: 1;
+    margin-bottom: 0 !important;
+    margin-right: 12px;
+}
+
+.blfc-plugin .setting-item .setting-item-control {
+    flex-shrink: 0;
+}
+
+/* 滑块控件样式 - 去除立体效果 */
+.blfc-plugin .setting-item-control .slider {
+    width: 100%;
+    margin-top: 4px !important;
+}
+
+/* 下拉菜单样式 - 去除立体效果 */
+.blfc-plugin .setting-item-control .dropdown {
+    width: 100%;
+    margin-top: 4px !important;
+}
+
+/* 按钮样式统一 - 插件设置页所有按钮：无边框、12px 圆角 */
+.blfc-plugin .setting-item-control button,
+.blfc-plugin button {
+    box-shadow: none !important;
+    border: 0 !important;
+    border-radius: 12px !important;
+}
+
+.blfc-plugin .setting-item-control button {
+    margin-top: 4px !important;
+}
+
+/* 文本输入框样式 */
+.blfc-plugin .setting-item-control input[type="text"] {
+    box-shadow: none !important;
+    border: 1px solid var(--background-modifier-border) !important;
+    border-radius: 25px !important;
+}
+
+/* 下拉框样式 */
+.blfc-plugin .setting-item-control select,
+.blfc-plugin select {
+    box-shadow: none !important;
+    border: 1px solid var(--background-modifier-border) !important;
+    margin-top: 4px !important;
+    border-radius: 25px !important;
+}
+
+/* 只在插件设置页隐藏分隔线 */
+.blfc-plugin hr {
+    display: none !important;
+}
+
+/* 标题样式 - 只在插件设置页生效 */
+.blfc-plugin h2, 
+.blfc-plugin h3, 
+.blfc-plugin h4 {
+    margin-top: 0;
+    margin-bottom: 6px !important;
+    color: var(--text-normal);
+}
+
+.blfc-plugin h2 {
+    margin-bottom: 8px !important;
+}
+
+.blfc-plugin h3 {
+    margin-top: 10px !important;
+    padding-top: 8px;
+    border-top: none !important;
+}
+
+.blfc-plugin h4 {
+    margin-top: 8px !important;
+    font-size: 14px;
+}
+
+/* ========== 词库管理（路径设置行 + 词库列表表格） ========== */
+.blfc-plugin .blfc-lib-config-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 500;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+/* 词库文件夹路径行：label + 输入框 + 刷新 同排（主区卡片内唯一配置项） */
+.blfc-plugin .blfc-lib-folder-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 2px 0 0;
+    padding: 4px 8px 6px;
+}
+
+.blfc-plugin .blfc-lib-folder-input {
+    flex: 1;
+    min-width: 0;
+    font-size: 13px;
+    padding: 5px 8px;
+    height: 30px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    background-color: var(--background-primary);
+    color: var(--text-normal);
+}
+
+.blfc-plugin .blfc-lib-folder-input:focus {
+    border-color: var(--interactive-accent);
+    outline: none;
+}
+
+.blfc-plugin .blfc-lib-refresh-btn {
+    flex: 0 0 auto;
+    font-size: 13px;
+    height: 30px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 12px;
+    background-color: var(--interactive-normal);
+    color: var(--text-normal);
+    cursor: pointer;
+}
+
+.blfc-plugin .blfc-lib-refresh-btn:hover {
+    background-color: var(--interactive-hover);
+}
+
+/* 词库表格 */
+.blfc-plugin .blfc-lib-table-wrap {
+    margin: 4px 0 8px 0;
+}
+
+.blfc-plugin .blfc-lib-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    border: none;
+    border-radius: 0;
+}
+
+.blfc-plugin .blfc-lib-table th {
+    text-align: left;
+    font-weight: 500;
+    font-size: 12px;
+    color: var(--text-muted);
+    padding: 7px 12px;
+    background: transparent;
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.blfc-plugin .blfc-lib-table td {
+    padding: 7px 12px;
+    border-bottom: 0.5px solid var(--background-modifier-border);
+    color: var(--text-normal);
+}
+
+.blfc-plugin .blfc-lib-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.blfc-plugin .blfc-lib-row {
+    cursor: pointer;
+    transition: background-color 0.12s ease;
+}
+
+.blfc-plugin .blfc-lib-row:hover {
+    background-color: var(--background-modifier-hover);
+}
+
+.blfc-plugin .blfc-lib-row.blfc-row-active {
+    background-color: var(--background-modifier-active-hover, var(--background-modifier-hover));
+}
+
+.blfc-plugin .blfc-lib-table .blfc-col-num {
+    text-align: right;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.blfc-plugin .blfc-lib-table .blfc-col-center {
+    text-align: center;
+    width: 48px;
+}
+
+.blfc-plugin .blfc-dot-on {
+    color: var(--interactive-accent);
+    font-size: 14px;
+}
+
+.blfc-plugin .blfc-dot-off {
+    color: var(--text-faint);
+    font-size: 14px;
+}
+
+.blfc-plugin .blfc-lib-empty {
+    font-size: 13px;
+    color: var(--text-muted);
+    padding: 8px 0;
+}
+
+/* 词库列表中的颜色取色器 */
+.blfc-plugin .blfc-lib-color {
+    width: 30px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    cursor: pointer;
+}
+
+/* 词库列表中的图标文本输入框 */
+.blfc-plugin .blfc-lib-icon {
+    width: 130px;
+    min-width: 0;
+    font-size: 12px;
+    font-family: var(--font-monospace);
+    padding: 3px 6px;
+    height: 26px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    background-color: var(--background-primary);
+    color: var(--text-normal);
+}
+
+.blfc-plugin .blfc-lib-icon:focus {
+    border-color: var(--interactive-accent);
+    outline: none;
+}
+
+/* 图标名无法解析（如 CI-* 来源插件未启用）时的红框提示 */
+.blfc-plugin .blfc-lib-icon.blfc-lib-icon-err {
+    border-color: var(--text-error);
+    background-color: var(--background-modifier-error, transparent);
+}
+
+.blfc-plugin .blfc-lib-icon.blfc-lib-icon-err:focus {
+    border-color: var(--text-error);
+}
+
+
+
+
+/* 词库切换器模态框 */
+.blfc-plugin .blfc-lib-list {
+    max-height: 400px;
+    overflow-y: auto;
+    margin: 10px 0;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+}
+
+.blfc-plugin .blfc-lib-item {
+    padding: 10px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--background-modifier-border);
+    transition: background-color 0.2s;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.blfc-plugin .blfc-lib-item:last-child {
+    border-bottom: none;
+}
+
+.blfc-plugin .blfc-lib-item:hover {
+    background-color: var(--background-modifier-hover);
+}
+
+.blfc-plugin .blfc-lib-item.blfc-is-active {
+    background-color: var(--background-modifier-active);
+    border-left: 3px solid var(--color-green);
+}
+
+.blfc-plugin .blfc-modal-lib-name {
+    font-weight: 500;
+    color: var(--text-normal);
+    flex: 1;
+}
+
+.blfc-plugin .blfc-modal-btn-container {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 15px;
+    padding-top: 10px;
+    border-top: 1px solid var(--background-modifier-border);
+}
+
+/* 创建词库弹窗的名称输入框（原 JS 内联样式迁移至此） */
+.blfc-plugin .blfc-lib-name-input {
+    width: 100%;
+    padding: 8px;
+    margin: 10px 0;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    background: var(--background-primary);
+    color: var(--text-normal);
+    font-size: 13px;
+}
+.blfc-plugin .blfc-lib-name-input:focus {
+    outline: none;
+    border-color: var(--interactive-accent);
+}
+
+/* 调试信息样式 */
+.blfc-plugin .blfc-debug-info {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    background-color: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    padding: 10px;
+    font-size: 12px;
+    z-index: 1000;
+    max-width: 300px;
+    box-shadow: none !important;
+}
+
+/* 词库参考二级页：文档排版 */
+.blfc-plugin .blfc-ref-doc {
+    margin: 2px 0 8px;
+}
+
+.blfc-plugin .blfc-ref-doc pre {
+    background-color: var(--background-primary);
+    padding: 10px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 8px 0 4px;
+    border: 1px solid var(--background-modifier-border);
+    line-height: 1.5;
+}
+
+.blfc-plugin .blfc-ref-doc pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    font-family: var(--font-monospace);
+    font-size: 12.5px;
+    white-space: pre;
+}
+
+.blfc-plugin .blfc-ref-doc ul {
+    margin: 6px 0;
+    padding-left: 20px;
+}
+
+.blfc-plugin .blfc-ref-doc li {
+    margin-bottom: 4px;
+    line-height: 1.5;
+}
+
+.blfc-plugin .blfc-ref-doc code {
+    background-color: var(--background-primary);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-family: var(--font-monospace);
+    border: 1px solid var(--background-modifier-border);
+    font-size: 12px;
+}
+
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .blfc-plugin .blfc-lib-actions {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+}
+
+/* 类别颜色定义 - 全局生效 */
+:root {
+    --color-green: #10b981;
+    --color-blue: #3b82f6;
+    --color-orange: #f59e0b;
+    --color-purple: #8b5cf6;
+    --color-red: #ef4444;
+    --color-cyan: #06b6d4;
+    --color-yellow: #fbbf24;
+    --color-pink: #ec4899;
+    --color-gray: #6b7280;
+    --color-red-dark: #dc2626;
+    --color-green-dark: #059669;
+    --color-blue-dark: #2563eb;
+}
+
+/* ========== 旧版弹出式词库选择器样式已移除（改为左边缘彩条，见 .blfc-edge-strips） ========== */
+
+/* 设置页标题布局 */
+.blfc-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.blfc-icon svg {
+    width: 28px;
+    height: 28px;
+    color: var(--interactive-accent);
+}
+
+/* ========== 悬浮补全弹窗样式 ========== */
+/* 弹窗容器：定位/尺寸由 JS 经 setCssProps 写入下列 CSS 变量（不产生内联样式）；
+   未写入时使用本块的默认值（left/top 0、max-width 不限、max-height 200px） */
+.blfc-suggest-popup {
+    position: fixed;
+    left: var(--blfc-pop-left, 0px);
+    top: var(--blfc-pop-top, 0px);
+    max-width: var(--blfc-pop-maxw, none);
+    max-height: var(--blfc-pop-maxh, 200px);
+    /* 层级：高于工作区内容，但低于任何模态窗口（Obsidian .modal-container 为 --layer-modal=50），
+       避免补全词条浮在其他插件的弹窗（图片选择器、设置等）之上 */
+    z-index: calc(var(--layer-modal, 50) - 1);
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    overflow-y: auto;
+    min-width: 160px;
+    font-size: 13px;
+    padding: 3px 0;
+    /* 类别色点配色：自成命名空间，不覆盖 Obsidian 主题的 --color-* 变量 */
+    --blfc-dot-scene: #3b82f6;
+    --blfc-dot-character: #10b981;
+    --blfc-dot-action: #f59e0b;
+    --blfc-dot-other: #9ca3af;
+}
+
+/* 弹窗隐藏态：JS 切换 blfc-popup-hidden 类，替代内联 display:none/block */
+.blfc-suggest-popup.blfc-popup-hidden {
+    display: none;
+}
+
+/* 空态提示 */
+.blfc-suggest-empty {
+    padding: 8px 12px;
+    color: var(--text-muted);
+    text-align: center;
+    font-size: 12px;
+}
+
+/* 建议项 - 单行态：名称行常显，预览按需展开 */
+.blfc-suggest-item {
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    transition: background-color 0.12s ease;
+}
+
+/* 去掉逐条分隔线，选中态仅用背景色区分 */
+.blfc-suggest-item:hover,
+.blfc-suggest-item.blfc-is-selected {
+    background-color: var(--background-modifier-hover);
+}
+
+/* 名称行：色点 + 单行文本 */
+.blfc-suggest-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 10px;
+}
+
+.blfc-suggest-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: var(--blfc-dot-other);
+}
+
+.blfc-suggest-dot.blfc-dot-scene { background: var(--blfc-dot-scene); }
+.blfc-suggest-dot.blfc-dot-character { background: var(--blfc-dot-character); }
+.blfc-suggest-dot.blfc-dot-action { background: var(--blfc-dot-action); }
+
+/* 建议主内容 */
+.blfc-suggest-item .blfc-suggest-name {
+    color: var(--text-normal);
+    font-size: 13px;
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 建议预览 - 仅选中/悬停项展开，去掉原来的灰底+左边框重块 */
+.blfc-suggest-item .blfc-suggest-preview {
+    display: none;
+    font-family: "Courier New", monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    padding: 0 10px 5px 23px;
+    white-space: pre-wrap;
+    max-height: 34px;
+    overflow: hidden;
+    line-height: 1.35;
+}
+
+.blfc-suggest-item.blfc-preview-on .blfc-suggest-preview {
+    display: block;
+}
+
+/* 弹窗滚动条 */
+.blfc-suggest-popup::-webkit-scrollbar {
+    width: 6px;
+}
+
+.blfc-suggest-popup::-webkit-scrollbar-thumb {
+    background-color: var(--background-modifier-border);
+    border-radius: 3px;
+}
+
+.blfc-suggest-popup::-webkit-scrollbar-thumb:hover {
+    background-color: var(--interactive-accent);
+}
+
+/* ========== 格式模板弹窗分组头（数据驱动分组渲染） ========== */
+.blfc-suggest-head {
+    padding: 3px 10px 2px;
+    margin-top: 2px;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: var(--text-muted);
+    background: var(--background-secondary);
+    border-top: 1px solid var(--background-modifier-border);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.blfc-suggest-head:first-child {
+    border-top: none;
+    margin-top: 0;
+}
+
+/* ========== 设置页：格式模板（分组 / 条目 / 触发器 / 槽位） ========== */
+.blfc-fmt-tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 6px 0;
+}
+
+.blfc-fmt-subhead {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-accent);
+    margin: 10px 0 2px;
+}
+
+.blfc-fmt-btn {
+    font-size: 12px;
+    padding: 2px 10px;
+    min-height: 24px;
+    border-radius: 12px;
+    color: var(--text-normal);
+    background: var(--interactive-normal);
+    border: 0;
+    cursor: pointer;
+}
+.blfc-fmt-btn:hover {
+    color: var(--text-normal);
+    background: var(--interactive-hover);
+}
+
+.blfc-fmt-bind-btn {
+    color: var(--text-accent);
+    max-width: 380px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.blfc-fmt-items {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding-left: 4px;
+}
+
+.blfc-fmt-item-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    padding: 2px 4px;
+    border-radius: var(--radius-s, 4px);
+}
+.blfc-fmt-item-row:hover {
+    background: var(--background-modifier-hover);
+}
+
+.blfc-fmt-item-name {
+    border: none;
+    background: transparent;
+    color: var(--text-normal);
+    font-size: 13px;
+    font-weight: 500;
+    padding: 0;
+    cursor: pointer;
+    text-align: left;
+    min-width: 84px;
+    white-space: nowrap;
+}
+.blfc-fmt-item-name:hover {
+    color: var(--text-accent);
+    text-decoration: underline;
+}
+.blfc-fmt-item-name-static {
+    color: var(--text-normal);
+    font-size: 13px;
+    font-weight: 500;
+    min-width: 84px;
+    white-space: nowrap;
+}
+
+.blfc-fmt-item-type {
+    font-size: 11px;
+    color: var(--text-muted);
+    background: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 3px;
+    padding: 0 5px;
+    flex-shrink: 0;
+}
+
+.blfc-fmt-item-tpl {
+    flex: 1;
+    min-width: 0;
+    font-family: var(--font-monospace);
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.blfc-fmt-empty {
+    color: var(--text-muted);
+    font-size: 12px;
+    padding: 4px 8px;
+}
+
+.blfc-fmt-trigger-flag {
+    font-size: 11px;
+    color: var(--text-faint);
+    min-width: 72px;
+}
+
+.blfc-fmt-trigger-input {
+    width: 130px;
+    font-family: var(--font-monospace);
+    font-size: 12px;
+    padding: 2px 6px;
+}
+
+.blfc-fmt-slot-row {
+    padding: 2px 0;
+}
+.blfc-fmt-slot-index {
+    font-size: 12px;
+    min-width: 58px;
+    font-weight: 500;
+    color: var(--text-normal);
+}
+
+/* 弹窗内控件 */
+.blfc-plugin .blfc-fmt-name-input {
+    width: 100%;
+    margin-bottom: 8px;
+}
+.blfc-plugin .blfc-fmt-group-pick {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 10px 0;
+    max-height: 300px;
+    overflow-y: auto;
+}
+.blfc-plugin .blfc-fmt-group-pick-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 13px;
+}
+.blfc-plugin .blfc-fmt-edit-preview {
+    margin: 10px 0 4px;
+    padding: 8px 10px;
+    background: var(--background-secondary);
+    border-radius: var(--radius-s, 4px);
+}
+.blfc-plugin .blfc-fmt-edit-preview-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
+.blfc-plugin .blfc-fmt-edit-preview-body {
+    font-family: var(--font-monospace);
+    font-size: 12px;
+    color: var(--text-normal);
+    white-space: pre-wrap;
+    word-break: break-all;
+    margin: 0;
+}
+.blfc-plugin .blfc-fmt-transfer-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+.blfc-plugin .blfc-fmt-transfer-textarea {
+    width: 100%;
+    font-family: var(--font-monospace);
+    font-size: 12px;
+}
+
+/* ========== 模板库设置（触发字符 / 直达命令 / 高级） ========== */
+.blfc-plugin .blfc-fmt-entry {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    flex-wrap: wrap;
+}
+.blfc-plugin .blfc-fmt-entry-label {
+    font-size: 13px;
+    font-weight: 500;
+    min-width: 58px;
+}
+.blfc-plugin .blfc-fmt-hint {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+.blfc-plugin .blfc-fmt-count {
+    font-size: 11px;
+    color: var(--text-faint);
+}
+.blfc-plugin .blfc-fmt-advanced {
+    margin-top: 14px;
+    padding-top: 6px;
+}
+.blfc-plugin .blfc-fmt-advanced > summary {
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text-muted);
+    user-select: none;
+}
+.blfc-plugin .blfc-fmt-advanced .blfc-fmt-tools {
+    padding: 6px 0 0;
+}
+
+/* ========== 格式模板 / 词库管理主区：统一卡片背景 ========== */
+.blfc-plugin .blfc-fmt-area,
+.blfc-plugin .blfc-lib-area {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-bottom: 18px;
+    background: var(--background-secondary);
+    border-radius: var(--radius-s, 6px);
+    padding: 10px 12px;
+}
+
+.blfc-plugin .blfc-fmt-area > .blfc-fmt-entry,
+.blfc-plugin .blfc-fmt-area > .blfc-fmt-advanced {
+    padding-left: 8px;
+    padding-right: 8px;
+}
+
+.blfc-plugin .blfc-fmt-header,
+.blfc-plugin .blfc-lib-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 8px 4px;
+    margin-bottom: 4px;
+}
+
+.blfc-plugin .blfc-fmt-title,
+.blfc-plugin .blfc-lib-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-normal);
+}
+
+.blfc-plugin .blfc-fmt-add-btn,
+.blfc-plugin .blfc-lib-entry-btn {
+    appearance: none;
+    color: var(--interactive-accent);
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    padding: 2px 10px;
+    min-height: 24px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: 12px;
+}
+
+.blfc-plugin .blfc-fmt-add-btn:hover,
+.blfc-plugin .blfc-lib-entry-btn:hover {
+    background: var(--background-modifier-hover);
+}
+
+/* ========== 分组概览行：无按钮、无框线、文字左对齐 ========== */
+.blfc-plugin .blfc-fmt-group-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: var(--radius-s, 4px);
+    border: none;
+}
+
+.blfc-plugin .blfc-fmt-group-row:hover {
+    background: var(--background-modifier-hover);
+}
+
+.blfc-plugin .blfc-fmt-group-row-main {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    cursor: default;
+}
+
+.blfc-plugin .blfc-fmt-group-row-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-normal);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 90px;
+    text-align: left;
+}
+
+.blfc-plugin .blfc-fmt-group-row-meta {
+    font-size: 12px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    text-align: left;
+}
+
+.blfc-plugin .blfc-fmt-group-row .blfc-fmt-arrow {
+    appearance: none;
+    margin-left: auto;
+    font-size: 18px;
+    line-height: 1;
+    padding: 4px 10px;
+    color: var(--text-muted);
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    cursor: pointer;
+    border-radius: 12px;
+}
+
+.blfc-plugin .blfc-fmt-group-row .blfc-fmt-arrow:hover {
+    color: var(--text-accent);
+    background: var(--background-modifier-hover);
+}
+
+/* ========== 分组二级页面（返回栏 / 行尾箭头） ========== */
+.blfc-plugin .blfc-fmt-subnav {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 0 10px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    margin-bottom: 12px;
+}
+.blfc-plugin .blfc-fmt-subnav-crumb {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+/* 分组页：直达命令绑定区 */
+.blfc-plugin .blfc-fmt-qc-box {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 4px 0 8px;
+}
+.blfc-plugin .blfc-fmt-qc-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 4px;
+    border-radius: var(--radius-s, 4px);
+    cursor: pointer;
+    font-size: 13px;
+}
+.blfc-plugin .blfc-fmt-qc-row:hover {
+    background: var(--background-modifier-hover);
+}
+.blfc-plugin .blfc-fmt-qc-name {
+    color: var(--text-normal);
+    font-weight: 500;
+}
+.blfc-plugin .blfc-fmt-qc-box .blfc-fmt-count {
+    margin-left: auto;
+}
+.blfc-plugin .blfc-fmt-qc-box > .blfc-fmt-btn {
+    align-self: flex-start;
+    margin-top: 4px;
+}
+
+/* ========== 规范整改（2026-09-09）：setHeading 标题观感 / 按钮间距 / 区块对齐 ========== */
+
+/* 用 new Setting().setHeading() 替换手写 h3/h4 后，保留原先分区块的分隔节奏 */
+.blfc-plugin .setting-item-heading {
+    margin: 12px 0 2px;
+}
+.blfc-plugin .setting-item-heading:first-child {
+    margin-top: 0;
+}
+.blfc-plugin .setting-item-heading .setting-item-name {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-normal);
+}
+
+/* 「词库参考」文档区内的两级小节标题：与代码块内容左缘对齐 */
+.blfc-plugin .blfc-ref-doc .setting-item-heading {
+    padding: 0 !important;
+    margin: 14px 0 2px;
+}
+.blfc-plugin .blfc-ref-doc .setting-item-heading:first-child {
+    margin-top: 0;
+}
+
+/* 词库参考卡片里的描述行（原 .blfc-fmt-entry 的 JS 内联 padding 迁移） */
+.blfc-plugin .blfc-lib-area .blfc-fmt-entry {
+    padding: 2px 8px 4px;
+}
+
+/* 分组二级页按钮的纵向间距（原 JS 内联 margin 迁移） */
+.blfc-plugin .blfc-fmt-btn.blfc-fmt-btn-ren {
+    margin: 8px 0;
+}
+.blfc-plugin .blfc-fmt-btn.blfc-fmt-btn-add {
+    margin: 6px 0 10px;
+}
+/* 删除分组的危险按钮：红字 + 页尾间距（hover 保持红色） */
+.blfc-plugin .blfc-fmt-btn.blfc-fmt-btn-danger,
+.blfc-plugin .blfc-fmt-btn.blfc-fmt-btn-danger:hover {
+    margin-top: 14px;
+    color: var(--text-error);
+}
+
+/* 文本测量镜像（原 TextInserter 内联 cssText 迁移至此，与运行期复制的字体/宽度互不影响） */
+.blfc-text-mirror {
+    position: fixed;
+    visibility: hidden;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    z-index: -1;
+}

@@ -129,7 +129,7 @@ export class FormatsManager {
       file = this.homeOrphans(file);
     } else {
       // v1 / v2 旧结构 → v4
-      file = this.migrateLegacy(obj as unknown as LegacyFormatsLike);
+      file = this.migrateLegacy(obj);
       changed = true;
     }
 
@@ -162,12 +162,12 @@ export class FormatsManager {
     out.groups = out.groups.map((g) => {
       const { builtin: _b, ...rest } = g as FormatGroup & { builtin?: boolean };
       void _b;
-      return rest as FormatGroup;
+      return rest;
     });
     out.items = out.items.map((i) => {
       const { builtin: _b, ...rest } = i as FormatItem & { builtin?: boolean };
       void _b;
-      return rest as FormatItem;
+      return rest;
     });
     return out;
   }
@@ -188,7 +188,7 @@ export class FormatsManager {
     }
     orphans.forEach((o) => {
       const item = out.items.find((x) => x.id === o.id);
-      if (item) item.group = migrated!.id;
+      if (item) item.group = migrated.id;
     });
     return out;
   }

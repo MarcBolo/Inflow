@@ -3,6 +3,7 @@
  */
 import { TextInserter } from './textInserter';
 import type { Suggestion } from './types';
+import { setCssVar } from './dom';
 
 interface CursorPos {
   x: number;
@@ -46,10 +47,10 @@ export class FloatingSuggestPopup {
 
   create(): void {
     if (this.container) return;
-    this.container = document.createElement('div');
+    this.container = document.body.createDiv();
     this.container.className = 'blfc-suggest-popup';
-    // 显示/隐藏由内联控制，视觉样式见 styles.css
-    this.container.style.display = 'none';
+    // 显示/隐藏由 blfc-popup-hidden 状态类控制，视觉样式见 styles.css
+    this.container.addClass('blfc-popup-hidden');
     document.body.appendChild(this.container);
   }
 
@@ -81,7 +82,7 @@ export class FloatingSuggestPopup {
     if (this.isVisible()) this.unbindEvents();
     this.renderItems();
     // 先显示再定位：positionNearCursor 依赖 offsetWidth/offsetHeight 取真实渲染尺寸
-    this.container!.style.display = 'block';
+    this.container!.removeClass('blfc-popup-hidden');
     this.positionNearCursor();
     // 定位时若发现光标已滚出视口会被收起（display:none），此时无需再挂事件
     if (!this.isVisible()) return;
@@ -91,7 +92,7 @@ export class FloatingSuggestPopup {
   }
 
   hide(): void {
-    if (this.container) this.container.style.display = 'none';
+    if (this.container) this.container.addClass('blfc-popup-hidden');
     this.unbindEvents();
     if (this.onClose) {
       const cb = this.onClose;
@@ -101,12 +102,17 @@ export class FloatingSuggestPopup {
   }
 
   isVisible(): boolean {
-    return !!this.container && this.container.style.display === 'block';
+    return !!this.container && !this.container.classList.contains('blfc-popup-hidden');
   }
 
   /** 当前弹窗的触发字符（'' 表示智能补全） */
   getTriggerChar(): string {
     return this.triggerChar;
+  }
+
+  /** 当前是否有 Obsidian 模态窗口打开（任何插件的 Modal 都会挂 .modal-container 到 body） */
+  private isModalOpen(): boolean {
+    return !!document.querySelector('.modal-container');
   }
 
   /**
@@ -147,14 +153,14 @@ export class FloatingSuggestPopup {
 
   private renderRow(row: { kind: 'head'; text: string } | { kind: 'item'; suggestion: Suggestion; index: number }): void {
     if (row.kind === 'head') {
-      const head = document.createElement('div');
+      const head = this.container!.createDiv();
       head.className = 'blfc-suggest-head';
       head.textContent = row.text;
       this.container!.appendChild(head);
       return;
     }
     const { suggestion, index } = row;
-    const el = document.createElement('div');
+    const el = this.container!.createDiv();
     el.className = 'blfc-suggest-item';
     el.setAttribute('data-index', String(index));
     if (index === this.selectedIndex) {
@@ -163,13 +169,13 @@ export class FloatingSuggestPopup {
     }
 
     // 名称行：类别色点 + 显示文本（单行，不再常驻预览）
-    const rowEl = document.createElement('div');
+    const rowEl = el.createDiv();
     rowEl.className = 'blfc-suggest-row';
 
-    const dotEl = document.createElement('span');
+    const dotEl = rowEl.createSpan();
     dotEl.className = `blfc-suggest-dot blfc-dot-${this.dotFamily(suggestion.type)}`;
 
-    const nameEl = document.createElement('span');
+    const nameEl = rowEl.createSpan();
     nameEl.className = 'blfc-suggest-name';
     nameEl.textContent = suggestion.display || suggestion.name || '';
 
@@ -180,7 +186,7 @@ export class FloatingSuggestPopup {
     // 预览：默认隐藏，仅在选中/悬停时展开（渐进式披露，避免弹窗被重复色块淹没）
     const preview = suggestion.insert || suggestion.template || '';
     if (preview) {
-      const previewEl = document.createElement('div');
+      const previewEl = el.createDiv();
       previewEl.textContent = preview;
       previewEl.className = 'blfc-suggest-preview';
       el.appendChild(previewEl);
@@ -221,9 +227,9 @@ export class FloatingSuggestPopup {
     }
     this._renderedSig = sig;
 
-    this.container.innerHTML = '';
+    this.container.replaceChildren();
     if (this.items.length === 0) {
-      const empty = document.createElement('div');
+      const empty = this.container.createDiv();
       empty.className = 'blfc-suggest-empty';
       empty.textContent = '无匹配结果';
       this.container.appendChild(empty);
@@ -388,11 +394,11 @@ export class FloatingSuggestPopup {
       container.offsetHeight || Math.min(this.items.length * 28 + 6, 200);
 
     // 水平：以光标所在列为左缘，放不下时整体左移；内容过宽时按视口压缩
-    container.style.maxWidth = '';
     let left = pos.x;
+    let maxWidth = 'none'; // 与 styles.css 默认一致：不限制宽度
     const maxLeft = vw - MARGIN - popupWidth;
     if (maxLeft < MARGIN) {
-      container.style.maxWidth = vw - MARGIN * 2 + 'px';
+      maxWidth = `${vw - MARGIN * 2}px`;
       left = MARGIN;
     } else {
       if (left > maxLeft) left = maxLeft;
@@ -401,23 +407,25 @@ export class FloatingSuggestPopup {
 
     // 垂直：优先贴光标下方，下方不足一行高度时上移到光标上方
     let top = pos.y + GAP;
+    let maxHeight = '200px'; // styles.css 默认上限；下方空间不足时压缩
     const belowSpace = vh - top - MARGIN;
     if (popupHeight > belowSpace) {
       if (belowSpace >= 48) {
         // 下方空间不足但仍可容纳一行以上：压缩高度，保持弹窗在光标下方
-        container.style.maxHeight = Math.floor(belowSpace) + 'px';
+        maxHeight = `${Math.floor(belowSpace)}px`;
       } else {
         // 下方几乎无空间：上移紧贴光标上方（恢复完整高度）
-        container.style.maxHeight = '';
+        maxHeight = '200px';
         top = pos.y - popupHeight - GAP;
       }
-    } else {
-      container.style.maxHeight = '';
     }
     if (top < MARGIN) top = MARGIN;
 
-    container.style.left = left + 'px';
-    container.style.top = top + 'px';
+    // 位置/尺寸统一经 CSS 自定义属性写入（.blfc-suggest-popup 的 left/top/max-* 消费），不写内联样式
+    setCssVar(container, '--blfc-pop-left', `${left}px`);
+    setCssVar(container, '--blfc-pop-top', `${top}px`);
+    setCssVar(container, '--blfc-pop-maxw', maxWidth);
+    setCssVar(container, '--blfc-pop-maxh', maxHeight);
   }
 
   /** 用 rAF 合并高频事件（滚动/缩放），弹窗显示时始终贴近光标 */
@@ -433,6 +441,13 @@ export class FloatingSuggestPopup {
   bindEvents(): void {
     this._keydownHandler = (e) => {
       if (!this.isVisible()) return;
+
+      // 有其他模态窗口打开时（设置、其他插件弹窗等）：立刻收起弹窗并放行按键。
+      // 否则 document 捕获阶段的 Escape / Enter 分支会先截获按键，导致模态无法用 Esc 关闭。
+      if (this.isModalOpen()) {
+        this.hide();
+        return;
+      }
 
       // 输入法组字/选词期间一律放行，不参与任何按键判定。
       // keyCode 229 是部分 IME 在 composition 期间上报的兼容码。

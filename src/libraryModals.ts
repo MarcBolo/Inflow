@@ -23,19 +23,9 @@ export class LibraryCreationModal extends Modal {
       cls: 'blfc-lib-name-input',
     });
 
-    inputEl.style.width = '100%';
-    inputEl.style.padding = '8px';
-    inputEl.style.margin = '10px 0';
-    inputEl.style.border = '1px solid var(--background-modifier-border)';
-    inputEl.style.borderRadius = '4px';
-
     setTimeout(() => inputEl.focus(), 100);
 
-    const buttonContainer = contentEl.createEl('div', { cls: 'blfc-modal-btn-container' });
-    buttonContainer.style.display = 'flex';
-    buttonContainer.style.justifyContent = 'flex-end';
-    buttonContainer.style.gap = '10px';
-    buttonContainer.style.marginTop = '15px';
+    const buttonContainer = contentEl.createDiv({ cls: 'blfc-modal-btn-container' });
 
     const cancelButton = buttonContainer.createEl('button', { text: '取消' });
     cancelButton.onclick = () => this.close();
@@ -82,16 +72,16 @@ export class LibrarySwitcherModal extends Modal {
       return;
     }
 
-    const list = contentEl.createEl('div', { cls: 'blfc-lib-list' });
+    const list = contentEl.createDiv({ cls: 'blfc-lib-list' });
 
     this.libraries.forEach((library) => {
-      const item = list.createEl('div', { cls: 'blfc-lib-item' });
+      const item = list.createDiv({ cls: 'blfc-lib-item' });
 
       if (library === this.currentLibrary) {
         item.addClass('blfc-is-active');
       }
 
-      item.createEl('div', { text: library, cls: 'blfc-lib-name' });
+      item.createDiv({ text: library, cls: 'blfc-lib-name' });
 
       item.onclick = () => {
         this.callback(library);
@@ -99,7 +89,7 @@ export class LibrarySwitcherModal extends Modal {
       };
     });
 
-    const buttonContainer = contentEl.createEl('div', { cls: 'blfc-modal-btn-container' });
+    const buttonContainer = contentEl.createDiv({ cls: 'blfc-modal-btn-container' });
     const cancelButton = buttonContainer.createEl('button', { text: '取消' });
     cancelButton.onclick = () => this.close();
   }

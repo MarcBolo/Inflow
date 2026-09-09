@@ -332,7 +332,7 @@ export const DEFAULT_LIBRARY_PALETTE: readonly string[] = [
 ];
 
 export const WORD_BOUNDARY_RE =
-  /[\s.,;:!?\u3002\uff0c\uff1b\uff1a\uff01\uff1f\u3001\u2026\u2014\u00b7\uff08\uff09()\[\]{}\u3010\u3011\u300c\u300d\u300e\u300f\u201c\u201d\u2018\u2019\u300a\u300b]/;
+  /[\s.,;:!?\u3002\uff0c\uff1b\uff1a\uff01\uff1f\u3001\u2026\u2014\u00b7\uff08\uff09()[\]{}\u3010\u3011\u300c\u300d\u300e\u300f\u201c\u201d\u2018\u2019\u300a\u300b]/;
 
 /**
  * 智能补全查询词的最大长度。

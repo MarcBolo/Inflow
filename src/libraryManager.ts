@@ -164,7 +164,7 @@ export class LibraryManager {
 
   /** 解析词库条目：支持 显示|插入|描述 / 显示|插入 / 显示 三种格式 */
   parseLibraryItem(line: string): LibraryItem | null {
-    const cleanLine = line.replace(/^[-\*]\s*/, '').trim();
+    const cleanLine = line.replace(/^[-*]\s*/, '').trim();
     if (!cleanLine) return null;
 
     const parts = cleanLine.split('|').map((part) => part.trim());

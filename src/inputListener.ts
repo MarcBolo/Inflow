@@ -200,10 +200,10 @@ export class GlobalInputListener {
     let contentEl: HTMLElement | null = null;
     if (scope) {
       const cmEl: HTMLElement | null =
-        (scope.querySelector('.cm-editor') as HTMLElement | null) ||
+        scope.querySelector<HTMLElement>('.cm-editor') ||
         (scope.classList.contains('cm-editor') ? scope : null);
       contentEl =
-        (cmEl ? (cmEl.querySelector('.cm-content') as HTMLElement | null) : null) ||
+        (cmEl ? cmEl.querySelector<HTMLElement>('.cm-content') : null) ||
         (scope.classList.contains('cm-content') ? scope : null) ||
         cmEl ||
         scope;
