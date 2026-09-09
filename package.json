@@ -1,6 +1,6 @@
 {
   "name": "inflow",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "让词库的灵感流入笔尖——自建词库智能联想补全插件（Obsidian）",
   "main": "main.js",
   "scripts": {

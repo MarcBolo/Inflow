@@ -4,6 +4,17 @@ InFlow 遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 格式
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-09-09
+
+### 修复
+
+- 商店清单合规：minAppVersion 提升至 1.7.2（原 0.15.0 声明低于代码所用 API，`no-unsupported-api` 报 4 处 error）
+- 商店清单合规：description 以英文句点结尾；移除 manifest 中官方 schema 不存在的无效 `icon` 字段
+
+### 重构
+
+- styles.css 移除全部 27 处 `!important`（改为依赖选择器特异性与加载顺序，视觉等价）
+
 ## [1.0.1] - 2026-09-09
 
 首个 GitHub 发布版本，功能与 v1.0.0 一致（覆盖此前独立的早期仓库历史）。

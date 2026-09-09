@@ -65,7 +65,7 @@
 /* 图标独占形态：有图标的词库不再显示彩条底色，只显示图标
    （图标颜色由 JS 按 词库色/lucide 上色，emoji 与彩色 SVG 保留自带色） */
 .blfc-edge-strip.blfc-icon-only {
-    background: transparent !important;
+    background: transparent;
 }
 
 .blfc-edge-strip:hover {
@@ -86,7 +86,7 @@
 }
 
 .blfc-edge-strip-active.blfc-icon-only {
-    background: transparent !important;
+    background: transparent;
 }
 
 /* 注：激活放大仅用上方 transform:scale(1.5)，不再改 font-size / svg 宽高
@@ -115,7 +115,7 @@
 }
 
 .blfc-plugin .setting-item-description kbd {
-    box-shadow: none !important;
+    box-shadow: none;
     margin: 0 2px;
 }
 
@@ -163,13 +163,13 @@
 .blfc-plugin .setting-item {
     flex-direction: row;
     align-items: center;
-    padding: 8px 12px !important;
-    border-top: none !important;
+    padding: 8px 12px;
+    border-top: none;
 }
 
 .blfc-plugin .setting-item .setting-item-info {
     flex: 1;
-    margin-bottom: 0 !important;
+    margin-bottom: 0;
     margin-right: 12px;
 }
 
@@ -180,46 +180,46 @@
 /* 滑块控件样式 - 去除立体效果 */
 .blfc-plugin .setting-item-control .slider {
     width: 100%;
-    margin-top: 4px !important;
+    margin-top: 4px;
 }
 
 /* 下拉菜单样式 - 去除立体效果 */
 .blfc-plugin .setting-item-control .dropdown {
     width: 100%;
-    margin-top: 4px !important;
+    margin-top: 4px;
 }
 
 /* 按钮样式统一 - 插件设置页所有按钮：无边框、12px 圆角 */
 .blfc-plugin .setting-item-control button,
 .blfc-plugin button {
-    box-shadow: none !important;
-    border: 0 !important;
-    border-radius: 12px !important;
+    box-shadow: none;
+    border: 0;
+    border-radius: 12px;
 }
 
 .blfc-plugin .setting-item-control button {
-    margin-top: 4px !important;
+    margin-top: 4px;
 }
 
 /* 文本输入框样式 */
 .blfc-plugin .setting-item-control input[type="text"] {
-    box-shadow: none !important;
-    border: 1px solid var(--background-modifier-border) !important;
-    border-radius: 25px !important;
+    box-shadow: none;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 25px;
 }
 
 /* 下拉框样式 */
 .blfc-plugin .setting-item-control select,
 .blfc-plugin select {
-    box-shadow: none !important;
-    border: 1px solid var(--background-modifier-border) !important;
-    margin-top: 4px !important;
-    border-radius: 25px !important;
+    box-shadow: none;
+    border: 1px solid var(--background-modifier-border);
+    margin-top: 4px;
+    border-radius: 25px;
 }
 
 /* 只在插件设置页隐藏分隔线 */
 .blfc-plugin hr {
-    display: none !important;
+    display: none;
 }
 
 /* 标题样式 - 只在插件设置页生效 */
@@ -227,22 +227,22 @@
 .blfc-plugin h3, 
 .blfc-plugin h4 {
     margin-top: 0;
-    margin-bottom: 6px !important;
+    margin-bottom: 6px;
     color: var(--text-normal);
 }
 
 .blfc-plugin h2 {
-    margin-bottom: 8px !important;
+    margin-bottom: 8px;
 }
 
 .blfc-plugin h3 {
-    margin-top: 10px !important;
+    margin-top: 10px;
     padding-top: 8px;
-    border-top: none !important;
+    border-top: none;
 }
 
 .blfc-plugin h4 {
-    margin-top: 8px !important;
+    margin-top: 8px;
     font-size: 14px;
 }
 
@@ -488,7 +488,7 @@
     font-size: 12px;
     z-index: 1000;
     max-width: 300px;
-    box-shadow: none !important;
+    box-shadow: none;
 }
 
 /* 词库参考二级页：文档排版 */
@@ -1102,7 +1102,7 @@
 
 /* 「词库参考」文档区内的两级小节标题：与代码块内容左缘对齐 */
 .blfc-plugin .blfc-ref-doc .setting-item-heading {
-    padding: 0 !important;
+    padding: 0;
     margin: 14px 0 2px;
 }
 .blfc-plugin .blfc-ref-doc .setting-item-heading:first-child {
