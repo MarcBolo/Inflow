@@ -12,6 +12,10 @@ export class LibraryManager {
   libraries: Map<string, LoadedLibrary> = new Map();
   activeLibrary: string | null = null;
   activeLibraryData: LibraryData | null = null;
+  /** 最近一次全量解析中，无法被任何格式匹配的行数（诊断用，正常应为 0） */
+  parseFailureCount = 0;
+  /** 失败行示例（最多保留 20 条，供调试命令展示） */
+  parseFailures: string[] = [];
 
   constructor(private plugin: SimpleScriptCompleter) {
     this.app = plugin.app;
@@ -27,6 +31,8 @@ export class LibraryManager {
 
   async loadLibraries(): Promise<void> {
     this.libraries.clear();
+    this.parseFailureCount = 0;
+    this.parseFailures = [];
 
     const libraryDir = this.getLibraryDirectory();
     if (!libraryDir) return;
@@ -162,20 +168,25 @@ export class LibraryManager {
     return candidates[0];
   }
 
-  /** 解析词库条目：支持 显示|插入|描述 / 显示|插入 / 显示 三种格式 */
+  /**
+   * 解析词库条目：语法不再写死，由用户在 .inflow/itemFormats.json 里配置的
+   * 模板决定（多套格式按配置顺序依次尝试，见 ItemFormatsManager.parseLine）。
+   * 未被任何格式匹配的行计入 parseFailures，供调试命令排查。
+   */
   parseLibraryItem(line: string): LibraryItem | null {
     const cleanLine = line.replace(/^[-*]\s*/, '').trim();
     if (!cleanLine) return null;
 
-    const parts = cleanLine.split('|').map((part) => part.trim());
-
-    if (parts.length >= 3) {
-      return { display: parts[0], insert: parts[1], description: parts[2] };
-    } else if (parts.length === 2) {
-      return { display: parts[0], insert: parts[1] };
-    } else {
-      return { display: parts[0], insert: parts[0] };
+    const parsed = this.plugin.itemFormatsManager.parseLine(cleanLine);
+    if (!parsed) {
+      this.parseFailureCount++;
+      if (this.parseFailures.length < 20) this.parseFailures.push(cleanLine);
+      return null;
     }
+
+    const item: LibraryItem = { display: parsed.display, insert: parsed.insert };
+    if (parsed.description) item.description = parsed.description;
+    return item;
   }
 
   async reloadLibraries(): Promise<void> {

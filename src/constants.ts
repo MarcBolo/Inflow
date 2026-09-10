@@ -301,6 +301,7 @@ export const DEFAULT_SETTINGS: BLFormatCompleterSettings = {
   enableSmartCompletion: true,
   enableContextAware: true,
   enableMinimalTrigger: true,
+  enableInSearchPrompt: false,
   enablePinyin: true,
   smartMinLength: 1,
   smartMaxSuggestions: 10,

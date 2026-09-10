@@ -30,6 +30,11 @@ export class FloatingSuggestPopup {
   private _scrollHandler: ((e: Event) => void) | null = null;
   private _resizeHandler: (() => void) | null = null;
   private _rafId: number | null = null;
+  /** 发起 rAF 的窗口（弹出窗口的 rAF 必须由该窗口取消，不能用主窗口的） */
+  private _rafWin: Window | null = null;
+  /** 当前事件监听绑定所在的 document / window（弹出窗口与主窗口分开） */
+  private _boundDoc: Document | null = null;
+  private _boundWin: Window | null = null;
   private _clickBindTimer: number | null = null;
   /** 上次渲染的列表签名：内容未变时复用全部 DOM 节点，跳过 innerHTML 清空重建 */
   private _renderedSig: string | null = null;
@@ -45,13 +50,37 @@ export class FloatingSuggestPopup {
     void plugin;
   }
 
-  create(): void {
+  create(doc: Document = document): void {
     if (this.container) return;
-    this.container = document.body.createDiv();
+    this.container = doc.body.createDiv();
     this.container.className = 'blfc-suggest-popup';
     // 显示/隐藏由 blfc-popup-hidden 状态类控制，视觉样式见 styles.css
     this.container.addClass('blfc-popup-hidden');
-    document.body.appendChild(this.container);
+    doc.body.appendChild(this.container);
+  }
+
+  /** 弹窗所属 document：跟随输入面（弹出窗口里的输入框必须在本窗口内渲染弹窗） */
+  private _doc(): Document {
+    return this.targetEl?.ownerDocument ?? document;
+  }
+
+  /** 弹窗所属窗口：测量 / 监听 / 定时器都要用目标窗口的，不能用全局 window */
+  private _win(): Window {
+    return this._doc().defaultView ?? window;
+  }
+
+  /**
+   * 保证弹窗节点位于目标 document 内。
+   * 弹出窗口（popout）是独立 document：固定定位的弹窗只有在同一 document 里
+   * 才会覆盖在该窗口上，坐标才与目标窗口的视口一致。appendChild 会自动把
+   * 节点从原父节点摘除，因此主窗口 ↔ 弹出窗口来回切换时不会残留副本。
+   */
+  private _ensureOwnerDocument(): void {
+    if (!this.container) return;
+    const doc = this._doc();
+    if (this.container.ownerDocument !== doc && doc.body) {
+      doc.body.appendChild(this.container);
+    }
   }
 
   show(
@@ -77,7 +106,8 @@ export class FloatingSuggestPopup {
     this.selectedIndex = this._retainHighlight(items, prevItems, prevSelected, wasVisible);
     this.armed = false;
     this._cursorPos = cursorPos || null;
-    if (!this.container) this.create();
+    if (!this.container) this.create(this._doc());
+    else this._ensureOwnerDocument();
     // 弹窗正在显示时先解绑旧监听/旧定时器，避免重复累积
     if (this.isVisible()) this.unbindEvents();
     this.renderItems();
@@ -110,9 +140,14 @@ export class FloatingSuggestPopup {
     return this.triggerChar;
   }
 
-  /** 当前是否有 Obsidian 模态窗口打开（任何插件的 Modal 都会挂 .modal-container 到 body） */
-  private isModalOpen(): boolean {
-    return !!document.querySelector('.modal-container');
+  /**
+   * 弹窗当前是否依附于「模态窗内的输入面」。
+   * 2026-09-10 起放开模态输入：true 时弹窗层级抬到该模态之上
+   * （styles.css 的 .blfc-popup-in-modal），且避让边界改用模态对话框矩形。
+   */
+  private isAnchoredInModal(): boolean {
+    if (!this.targetEl || typeof this.targetEl.closest !== 'function') return false;
+    return !!this.targetEl.closest('.modal-container');
   }
 
   /**
@@ -168,7 +203,7 @@ export class FloatingSuggestPopup {
       el.addClass('blfc-preview-on');
     }
 
-    // 名称行：类别色点 + 显示文本（单行，不再常驻预览）
+    // 名称行：类别色点 + 显示文本
     const rowEl = el.createDiv();
     rowEl.className = 'blfc-suggest-row';
 
@@ -177,15 +212,27 @@ export class FloatingSuggestPopup {
 
     const nameEl = rowEl.createSpan();
     nameEl.className = 'blfc-suggest-name';
-    nameEl.textContent = suggestion.display || suggestion.name || '';
+    const displayText = suggestion.display || suggestion.name || '';
+    nameEl.textContent = displayText;
 
     rowEl.appendChild(dotEl);
     rowEl.appendChild(nameEl);
     el.appendChild(rowEl);
 
-    // 预览：默认隐藏，仅在选中/悬停时展开（渐进式披露，避免弹窗被重复色块淹没）
-    const preview = suggestion.insert || suggestion.template || '';
-    if (preview) {
+    // 描述：词条格式 {描述} 字段的内容，另起一行展示（淡色小字，最多两行）
+    const descText = (suggestion.description || '').trim();
+    if (descText) {
+      const descEl = el.createDiv();
+      descEl.className = 'blfc-suggest-desc';
+      descEl.textContent = descText;
+      descEl.title = descText;
+      el.appendChild(descEl);
+    }
+
+    // 预览：默认隐藏，仅在选中/悬停时展开（渐进式披露，避免弹窗被重复色块淹没）。
+    // 插入内容与显示文本完全相同时（词条格式未配 {插入}、回退为显示文本）不再重复展示。
+    const preview = (suggestion.insert || suggestion.template || '').trim();
+    if (preview && preview !== displayText.trim()) {
       const previewEl = el.createDiv();
       previewEl.textContent = preview;
       previewEl.className = 'blfc-suggest-preview';
@@ -214,7 +261,7 @@ export class FloatingSuggestPopup {
       .map((r) =>
         r.kind === 'head'
           ? `H\u0000${r.text}`
-          : `I\u0000${r.suggestion.display}\u0000${r.suggestion.insert}\u0000${r.suggestion.type}\u0000${r.suggestion.group}`,
+          : `I\u0000${r.suggestion.display}\u0000${r.suggestion.insert}\u0000${r.suggestion.description ?? ''}\u0000${r.suggestion.type}\u0000${r.suggestion.group}`,
       )
       .join('\u0001');
     if (
@@ -280,7 +327,7 @@ export class FloatingSuggestPopup {
     const sig = (s: Suggestion): string =>
       s.id
         ? `id\u0000${s.id}`
-        : `key\u0000${s.group ?? ''}\u0000${s.name ?? ''}\u0000${s.display ?? ''}\u0000${s.insert ?? ''}`;
+        : `key\u0000${s.group ?? ''}\u0000${s.name ?? ''}\u0000${s.display ?? ''}\u0000${s.insert ?? ''}\u0000${s.description ?? ''}`;
     const prevSig = sig(prev);
     const ni = items.findIndex((s) => sig(s) === prevSig);
     return ni >= 0 ? ni : 0;
@@ -327,16 +374,57 @@ export class FloatingSuggestPopup {
     if (pos) this._applyPosition(pos);
   }
 
-  /** 实时测量光标位置（每次都以当前光标为准）；失败时回退到打开时传入的快照 */
+  /**
+   * 当前真实焦点元素。
+   * 穿透 shadow DOM；且不能写 `instanceof HTMLElement` —— 弹出窗口（popout）里的元素
+   * 属于另一个 realm，用主窗口的构造函数判断会恒为 false。
+   */
+  private _activeEl(): HTMLElement | null {
+    const el = TextInserter.deepActiveElement(this._doc());
+    if (el && el.nodeType === 1 && typeof el.tagName === 'string') return el;
+    return null;
+  }
+
+  /**
+   * 取定位锚元素：真实焦点优先（表格单元格内嵌编辑器/模态输入框），
+   * 焦点不可编辑时退回弹窗打开时依附的元素。
+   */
+  private _pickAnchorEl(): HTMLElement | null {
+    const ae = this._activeEl();
+    if (ae) {
+      if (TextInserter.isEditable(ae)) return ae;
+      if (ae.closest('.cm-editor')) return ae;
+    }
+    return this.targetEl;
+  }
+
+  /**
+   * 实时测量光标位置（每次都以当前光标为准）；失败时回退到打开时传入的快照。
+   *
+   * 表格修复（2026-09-10）：Live Preview 表格是 cm-table-widget 替换块，单元格输入
+   * 发生在 widget 内嵌编辑器上；主编辑器对“被替换区内的文档位置”coordsAtPos 返回
+   * null 或整块矩形 → 必须以可视光标元素（.cm-cursor）为准，坐标测不到就收起，
+   * 绝不落到「内容区左上 +40px」这类会制造远处弹窗的假锚点。
+   */
   private _measureCursorPos(): CursorPos | null {
-    if (this.targetEl) {
-      // CM 编辑器：直接用 coordsAtPos 取光标视口坐标
-      // 不走 getCursorScreenPosition 的元素 rect 兜底（containerEl.bottom 会落到面板底部）
-      const cm = TextInserter.getCodeMirrorView(this.targetEl);
+    const anchor = this._pickAnchorEl();
+    if (!anchor) return this._cursorPos || null;
+
+    const cmEl = TextInserter.getCodeMirrorElement(anchor);
+    if (cmEl) {
+      const cm = TextInserter.getCodeMirrorView(cmEl);
       if (cm) {
         try {
           const head = cm.state.selection.main.head;
           const coords = cm.coordsAtPos(head);
+          const caret = this._visibleCaretRect(cmEl, coords);
+          if (caret) {
+            return {
+              x: caret.left,
+              y: caret.bottom,
+              height: Math.max(1, caret.bottom - caret.top),
+            };
+          }
           if (
             coords &&
             Number.isFinite(coords.left) &&
@@ -351,38 +439,145 @@ export class FloatingSuggestPopup {
         } catch (e) {
           void e;
         }
-        // coordsAtPos 返回 null（光标行未渲染）：用快照，不退化到容器底部
-        return this._cursorPos || null;
       }
-      // 非 CM 可编辑元素（textarea / input / contentEditable）：用 mirror 技术精确测量。
-      // 防线：只有真正可编辑的表单元素才允许走 getCursorScreenPosition——
-      // 其对普通 div 的兜底会返回元素 rect.bottom（整个编辑器面板底部），
-      // 这正是“弹窗跑到面板底部而非光标处”的坐标来源。
-      const el = this.targetEl;
-      const isPlainEditable =
-        el.tagName === 'TEXTAREA' || el.tagName === 'INPUT' || el.isContentEditable;
-      if (isPlainEditable) {
-        try {
-          const p = TextInserter.getCursorScreenPosition(el);
-          if (p && Number.isFinite(p.x) && Number.isFinite(p.y)) return p;
-        } catch (e) {
-          void e;
-        }
+      // 有 CM 元素但拿不到视图/坐标：仍试一次可视光标（表格嵌套编辑器、隐藏视图等）
+      const caret = this._visibleCaretRect(cmEl, null);
+      if (caret) {
+        return { x: caret.left, y: caret.bottom, height: Math.max(1, caret.bottom - caret.top) };
+      }
+      return this._cursorPos || null;
+    }
+
+    // 原生表单元素（input / textarea / 普通 contentEditable）
+    const ae = this._activeEl();
+    const el = ae && TextInserter.isEditable(ae) ? ae : anchor;
+    const isPlainEditable =
+      !!el && (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT' || el.isContentEditable);
+    if (isPlainEditable) {
+      try {
+        const p = TextInserter.getCursorScreenPosition(el);
+        if (p && Number.isFinite(p.x) && Number.isFinite(p.y)) return p;
+      } catch (e) {
+        void e;
       }
     }
     return this._cursorPos || null;
   }
 
-  /** 按光标坐标排版，并做视口避让：贴光标、不溢出、滚动时跟随 */
+  /**
+   * 可视光标锚点：优先取编辑器子树内真正显示的光标元素（.cm-cursor）。
+   * - 焦点在表格 widget 内时，优先该 widget 子树里的光标（Live Preview 表格单元格
+   *   的光标就挂在 cm-table-widget 的内嵌编辑器上）；
+   * - 有 coordsAtPos 参考坐标时取几何上最近的光标，避免多编辑器并存时取错；
+   * - 都找不到时，退回表格被选中单元格自身的矩形（多选/整块选中时光标层会被
+   *   Obsidian CSS 隐藏，此时单元格是唯一可见锚点）。
+   */
+  private _visibleCaretRect(
+    cmEl: HTMLElement,
+    preferNear: { left: number; bottom: number } | null,
+  ): { left: number; top: number; bottom: number } | null {
+    if (!cmEl || typeof cmEl.querySelectorAll !== 'function') return null;
+
+    const focusEl = this._activeEl();
+    const focusInWidget = !!focusEl?.closest?.('.cm-table-widget');
+    const widgetScope =
+      focusInWidget && focusEl ? focusEl.closest('.cm-table-widget') : null;
+
+    const cursorEls = Array.from(cmEl.querySelectorAll<HTMLElement>('.cm-cursor'));
+    const visible: Array<{ el: HTMLElement; r: DOMRect }> = [];
+    const win = this._win();
+    for (const el of cursorEls) {
+      if (el.classList.contains('cm-cursor-secondary')) continue;
+      const st = win.getComputedStyle(el);
+      // display/visibility 隐藏 = 光标层被关（如表格整块选中态）；opacity 忽略——
+      // 光标 blink 的“灭”相位正是 opacity:0，几何依然有效，不应被排除
+      if (st.display === 'none' || st.visibility === 'hidden') continue;
+      const r = el.getBoundingClientRect();
+      if (r.width <= 0 && r.height <= 0) continue;
+      if (r.bottom < -2 || r.top > win.innerHeight + 2) continue;
+      visible.push({ el, r });
+    }
+
+    const pick = (
+      list: Array<{ el: HTMLElement; r: DOMRect }>,
+    ): { left: number; top: number; bottom: number } | null => {
+      if (list.length === 0) return null;
+      let best = list[0];
+      if (preferNear) {
+        let bestD = Infinity;
+        for (const item of list) {
+          const cx = (item.r.left + item.r.right) / 2;
+          const cy = (item.r.top + item.r.bottom) / 2;
+          const d = Math.abs(cx - preferNear.left) + Math.abs(cy - preferNear.bottom);
+          if (d < bestD) {
+            bestD = d;
+            best = item;
+          }
+        }
+      }
+      return { left: best.r.left, top: best.r.top, bottom: best.r.bottom };
+    };
+
+    if (widgetScope) {
+      const scoped = visible.filter((v) => v.el.closest('.cm-table-widget') === widgetScope);
+      const hit = pick(scoped.length > 0 ? scoped : visible);
+      if (hit) return hit;
+    } else {
+      const hit = pick(visible);
+      if (hit) return hit;
+    }
+
+    // 兜底：表格选中态（光标层被隐藏）→ 用被选中/聚焦单元格矩形近似
+    const widget =
+      widgetScope || cmEl.querySelector<HTMLElement>('.cm-table-widget');
+    if (widget) {
+      const cell = widget.querySelector<HTMLElement>(
+        'td.is-selected, th.is-selected, td:focus-within, th:focus-within',
+      );
+      if (cell) {
+        const r = cell.getBoundingClientRect();
+        const st = win.getComputedStyle(cell);
+        const pl = parseFloat(st.paddingLeft) || 8;
+        const top = parseFloat(st.paddingTop) || 4;
+        return {
+          left: r.left + pl,
+          top: r.top + top,
+          bottom: r.top + top + 20,
+        };
+      }
+    }
+    return null;
+  }
+
+  /** 按光标坐标排版，并做视口/模态避让：贴光标、不溢出、滚动时跟随 */
   private _applyPosition(pos: CursorPos): void {
     const container = this.container!;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
+    // 模态窗内的输入面：层级抬到该模态之上（styles.css .blfc-popup-in-modal）
+    container.classList.toggle('blfc-popup-in-modal', this.isAnchoredInModal());
+
     const MARGIN = 8;
     const GAP = 4;
 
-    // 光标已滚出视口：收起，避免弹窗悬在错误位置
-    if (pos.y < -MARGIN || pos.y > vh + MARGIN) {
+    // 边界：普通编辑器用整个窗口；依附模态输入时改用模态对话框矩形
+    // （弹窗仍 fixed 于 body，坐标为视口系，用偏移换算即可）
+    const win = this._win();
+    let vw = win.innerWidth;
+    let vh = win.innerHeight;
+    let ox = 0;
+    let oy = 0;
+    if (this.isAnchoredInModal()) {
+      const modal = this.targetEl?.closest?.('.modal-container .modal') as HTMLElement | null;
+      const mr = modal ? modal.getBoundingClientRect() : null;
+      if (mr && mr.width > 0) {
+        ox = mr.left;
+        oy = mr.top;
+        vw = mr.width;
+        vh = mr.height;
+      }
+    }
+
+    // 光标已滚出可视区：收起，避免弹窗悬在错误位置
+    if (pos.y < oy - MARGIN || pos.y > oy + vh + MARGIN) {
       this.hide();
       return;
     }
@@ -393,22 +588,23 @@ export class FloatingSuggestPopup {
     const popupHeight =
       container.offsetHeight || Math.min(this.items.length * 28 + 6, 200);
 
-    // 水平：以光标所在列为左缘，放不下时整体左移；内容过宽时按视口压缩
+    // 水平：以光标所在列为左缘，放不下时整体左移；内容过宽时按可视区压缩
     let left = pos.x;
     let maxWidth = 'none'; // 与 styles.css 默认一致：不限制宽度
-    const maxLeft = vw - MARGIN - popupWidth;
-    if (maxLeft < MARGIN) {
+    const minLeft = ox + MARGIN;
+    const maxLeft = ox + vw - MARGIN - popupWidth;
+    if (maxLeft < minLeft) {
       maxWidth = `${vw - MARGIN * 2}px`;
-      left = MARGIN;
+      left = minLeft;
     } else {
       if (left > maxLeft) left = maxLeft;
-      if (left < MARGIN) left = MARGIN;
+      if (left < minLeft) left = minLeft;
     }
 
     // 垂直：优先贴光标下方，下方不足一行高度时上移到光标上方
     let top = pos.y + GAP;
     let maxHeight = '200px'; // styles.css 默认上限；下方空间不足时压缩
-    const belowSpace = vh - top - MARGIN;
+    const belowSpace = oy + vh - top - MARGIN;
     if (popupHeight > belowSpace) {
       if (belowSpace >= 48) {
         // 下方空间不足但仍可容纳一行以上：压缩高度，保持弹窗在光标下方
@@ -419,7 +615,8 @@ export class FloatingSuggestPopup {
         top = pos.y - popupHeight - GAP;
       }
     }
-    if (top < MARGIN) top = MARGIN;
+    const minTop = oy + MARGIN;
+    if (top < minTop) top = minTop;
 
     // 位置/尺寸统一经 CSS 自定义属性写入（.blfc-suggest-popup 的 left/top/max-* 消费），不写内联样式
     setCssVar(container, '--blfc-pop-left', `${left}px`);
@@ -432,7 +629,9 @@ export class FloatingSuggestPopup {
   private _scheduleRefresh(): void {
     if (!this.isVisible()) return;
     if (this._rafId != null) return;
-    this._rafId = window.requestAnimationFrame(() => {
+    const win = this._win();
+    this._rafWin = win;
+    this._rafId = win.requestAnimationFrame(() => {
       this._rafId = null;
       if (this.isVisible()) this.positionNearCursor();
     });
@@ -442,16 +641,18 @@ export class FloatingSuggestPopup {
     this._keydownHandler = (e) => {
       if (!this.isVisible()) return;
 
-      // 有其他模态窗口打开时（设置、其他插件弹窗等）：立刻收起弹窗并放行按键。
-      // 否则 document 捕获阶段的 Escape / Enter 分支会先截获按键，导致模态无法用 Esc 关闭。
-      if (this.isModalOpen()) {
-        this.hide();
-        return;
-      }
-
       // 输入法组字/选词期间一律放行，不参与任何按键判定。
       // keyCode 229 是部分 IME 在 composition 期间上报的兼容码。
       if (e.isComposing || e.keyCode === 229) return;
+
+      // 作用域策略（2026-09-10 起支持模态内输入面）：
+      // 只处理「来自弹窗所依附输入区域」的按键；其它区域的按键一律放行——
+      // 包括模态的列表导航、页面控件、另一编辑器的打字。
+      // 唯一的例外：Esc 全局收起弹窗但绝不拦截（让模态/页面自行处理关闭）。
+      if (!this.isEventFromTarget(e)) {
+        if (e.key === 'Escape') this.hide();
+        return;
+      }
 
       switch (e.key) {
         case 'ArrowDown':
@@ -503,45 +704,56 @@ export class FloatingSuggestPopup {
     this._scrollHandler = () => this._scheduleRefresh();
     this._resizeHandler = () => this._scheduleRefresh();
 
-    document.addEventListener('keydown', this._keydownHandler, true);
-    document.addEventListener('scroll', this._scrollHandler, true);
-    window.addEventListener('resize', this._resizeHandler);
+    // 监听挂在「弹窗所依附输入面所在的 document / window」上：
+    // 弹出窗口（popout）是独立 document，挂到主窗口会漏掉那里的按键与滚动
+    const doc = this._doc();
+    const win = this._win();
+    this._boundDoc = doc;
+    this._boundWin = win;
+    doc.addEventListener('keydown', this._keydownHandler, true);
+    doc.addEventListener('scroll', this._scrollHandler, true);
+    win.addEventListener('resize', this._resizeHandler);
     // 延迟绑定点击关闭：避免刚由 mousedown 触发的打开动作被立刻判定为“点击外部”而关闭
     if (this._clickBindTimer != null) {
-      window.clearTimeout(this._clickBindTimer);
+      win.clearTimeout(this._clickBindTimer);
       this._clickBindTimer = null;
     }
-    this._clickBindTimer = window.setTimeout(() => {
+    this._clickBindTimer = win.setTimeout(() => {
       this._clickBindTimer = null;
-      document.addEventListener('mousedown', this._clickHandler!, true);
+      doc.addEventListener('mousedown', this._clickHandler!, true);
     }, 50);
   }
 
   unbindEvents(): void {
+    const doc = this._boundDoc ?? this._doc();
+    const win = this._boundWin ?? this._win();
     if (this._keydownHandler) {
-      document.removeEventListener('keydown', this._keydownHandler, true);
+      doc.removeEventListener('keydown', this._keydownHandler, true);
       this._keydownHandler = null;
     }
     if (this._clickHandler) {
-      document.removeEventListener('mousedown', this._clickHandler, true);
+      doc.removeEventListener('mousedown', this._clickHandler, true);
       this._clickHandler = null;
     }
     if (this._scrollHandler) {
-      document.removeEventListener('scroll', this._scrollHandler, true);
+      doc.removeEventListener('scroll', this._scrollHandler, true);
       this._scrollHandler = null;
     }
     if (this._resizeHandler) {
-      window.removeEventListener('resize', this._resizeHandler);
+      win.removeEventListener('resize', this._resizeHandler);
       this._resizeHandler = null;
     }
     if (this._rafId != null) {
-      window.cancelAnimationFrame(this._rafId);
+      (this._rafWin ?? win).cancelAnimationFrame(this._rafId);
       this._rafId = null;
+      this._rafWin = null;
     }
     if (this._clickBindTimer != null) {
-      window.clearTimeout(this._clickBindTimer);
+      win.clearTimeout(this._clickBindTimer);
       this._clickBindTimer = null;
     }
+    this._boundDoc = null;
+    this._boundWin = null;
   }
 
   destroy(): void {

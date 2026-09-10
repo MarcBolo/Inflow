@@ -12,6 +12,7 @@ import { SceneNumberGenerator } from './sceneNumberGenerator';
 import { TextInserter } from './textInserter';
 import { SimpleScriptSettingTab } from './settingsTab';
 import { FormatsManager, MAX_QUICK_COMMANDS } from './formatsManager';
+import { ItemFormatsManager } from './itemFormatsManager';
 import { FormatSuggestModal } from './formatModals';
 import { offsetToLineCh, renderFormatTemplate } from './formatEngine';
 import {
@@ -72,6 +73,8 @@ export class SimpleScriptCompleter extends Plugin {
   libraryManager!: LibraryManager;
   /** 格式模板数据驱动层（formats.json 读写 / 触发查表 / 分组展开） */
   formatsManager!: FormatsManager;
+  /** 词条格式数据驱动层（itemFormats.json 读写 / 模板编译 / 词条行解析） */
+  itemFormatsManager!: ItemFormatsManager;
   globalListener!: GlobalInputListener;
   sceneNumberGenerator = new SceneNumberGenerator();
   quickPanel: LibraryEdgeStrips | null = null;
@@ -90,6 +93,11 @@ export class SimpleScriptCompleter extends Plugin {
   override async onload(): Promise<void> {
     await this.loadSettings();
     this.addSettingTab(new SimpleScriptSettingTab(this.app, this));
+
+    // 初始化词条格式管理器（itemFormats.json）：必须早于词库加载 ——
+    // 词条行的解析语法由它提供（模板驱动，代码中不再有写死的段数判定）
+    this.itemFormatsManager = new ItemFormatsManager(this);
+    await this.itemFormatsManager.initialize();
 
     // 初始化词库管理器
     this.libraryManager = new LibraryManager(this);
@@ -726,7 +734,7 @@ export class SimpleScriptCompleter extends Plugin {
       id: 'insert-dialogue',
       name: '插入角色对话',
       callback: () => {
-        const el = document.activeElement as HTMLElement | null;
+        const el = this.getActiveEditableEl();
         if (el && TextInserter.isEditable(el)) {
           TextInserter.insertText(el, '对话内容\n');
         }
@@ -755,7 +763,7 @@ export class SimpleScriptCompleter extends Plugin {
       id: 'renumber-current-episode',
       name: '重新编号当前集场景',
       callback: () => {
-        const el = document.activeElement as HTMLElement | null;
+        const el = this.getActiveEditableEl();
         const cm = el ? TextInserter.getCodeMirrorView(el) : null;
         if (cm) {
           const proxy = TextInserter.createCMEditorProxy(cm);
@@ -770,7 +778,7 @@ export class SimpleScriptCompleter extends Plugin {
       id: 'renumber-all-scenes',
       name: '重新编号整个文档',
       callback: () => {
-        const el = document.activeElement as HTMLElement | null;
+        const el = this.getActiveEditableEl();
         const cm = el ? TextInserter.getCodeMirrorView(el) : null;
         if (cm) {
           const proxy = TextInserter.createCMEditorProxy(cm);
@@ -932,6 +940,18 @@ export class SimpleScriptCompleter extends Plugin {
         message += `可用词库: ${allLibraries.length} 个（${allLibraries.join('、') || '无'}）\n`;
         message += `词库文件夹: ${this.libraryManager.getLibraryDirectory() || '未设置'}`;
 
+        const itemFormats = this.itemFormatsManager.formats;
+        message += `\n\n词条格式: ${itemFormats.length} 条`;
+        message += itemFormats.length
+          ? `\n${itemFormats.map((f) => `${f.name} → ${f.template}`).join('\n')}`
+          : '\n（无可用格式，词库将解析不出词条）';
+        const failCount = this.libraryManager.parseFailureCount;
+        if (failCount > 0) {
+          message += `\n\n⚠ ${failCount} 行未被任何格式匹配，已跳过`;
+          const samples = this.libraryManager.parseFailures.slice(0, 5);
+          if (samples.length) message += `\n示例: ${samples.join(' ｜ ')}`;
+        }
+
         if (activeData) {
           let typed = 0;
           let untyped = 0;
@@ -955,6 +975,34 @@ export class SimpleScriptCompleter extends Plugin {
         }
 
         new Notice(message);
+      },
+    });
+
+    // 调试命令：诊断当前焦点输入面（第三方插件输入框不触发补全时用）
+    this.addCommand({
+      id: 'diagnose-input-surface',
+      name: '诊断：当前输入面是否支持补全',
+      callback: () => {
+        // 先看主窗口；主窗口焦点在 body 时再扫一遍弹出窗口（popout 有独立 document）
+        let el = TextInserter.deepActiveElement(document);
+        if (!el || el === document.body) {
+          try {
+            this.app.workspace.iterateAllLeaves((leaf) => {
+              if (el && el !== document.body) return;
+              const d = leaf.view?.containerEl?.ownerDocument;
+              if (!d || d === document) return;
+              const cand = TextInserter.deepActiveElement(d);
+              if (cand && cand !== d.body) el = cand;
+            });
+          } catch (e) {
+            void e;
+          }
+        }
+        const report = TextInserter.describeInputSurface(el, {
+          allowSearchPrompt: this.settings.enableInSearchPrompt,
+        });
+        console.warn(`[InFlow] 输入面诊断\n${report}`);
+        new Notice(report);
       },
     });
 
@@ -1041,10 +1089,16 @@ export class SimpleScriptCompleter extends Plugin {
   insertTimestampAtCursor(): void {
     const TAG = '[InFlow]';
     const ts = this.formatTimestamp(new Date());
-    const el = document.activeElement as HTMLElement | null;
+    const el = this.getActiveEditableEl();
 
-    // 分支 1：焦点在可编辑元素上
-    if (el && TextInserter.isEditable(el) && !TextInserter.isInExcludedContainer(el)) {
+    // 分支 1：焦点在可编辑元素上（含 shadow DOM 与弹出窗口）
+    if (
+      el &&
+      TextInserter.isEditable(el) &&
+      !TextInserter.isInExcludedContainer(el, {
+        allowSearchPrompt: this.settings.enableInSearchPrompt,
+      })
+    ) {
       TextInserter.insertText(el, ts);
       return;
     }
@@ -1109,6 +1163,29 @@ export class SimpleScriptCompleter extends Plugin {
    * 统一的格式插入管线：模板求值（变量 + $0）→ 删除触发串 → 插入 → 光标落点。
    * editor 非空走 Obsidian Editor（CM）路径；否则走 DOM 元素路径（非 CM 输入框）。
    */
+  /**
+   * 取当前可编辑焦点元素：主窗口优先，其次各弹出窗口（popout），均穿透 shadow DOM。
+   * 命令类插入（插入对话 / 场景重编号 / 时间戳）依赖它 —— 之前只用
+   * `document.activeElement`，焦点落在第三方插件输入框（shadow DOM）或第二屏窗口时无反应。
+   */
+  private getActiveEditableEl(): HTMLElement | null {
+    const main = TextInserter.deepActiveElement(document);
+    if (main && main !== document.body && TextInserter.isEditable(main)) return main;
+    let found: HTMLElement | null = null;
+    try {
+      this.app.workspace.iterateAllLeaves((leaf) => {
+        if (found) return;
+        const d = leaf.view?.containerEl?.ownerDocument;
+        if (!d || d === document) return;
+        const cand = TextInserter.deepActiveElement(d);
+        if (cand && cand !== d.body && TextInserter.isEditable(cand)) found = cand;
+      });
+    } catch (e) {
+      void e;
+    }
+    return found ?? main;
+  }
+
   insertFormatItem(
     editor: Editor | null,
     el: HTMLElement | null,

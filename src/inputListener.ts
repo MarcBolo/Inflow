@@ -18,6 +18,9 @@ export class GlobalInputListener {
   private popup: FloatingSuggestPopup;
   private _inputHandler: ((e: Event) => void) | null = null;
   private _editorChangeRef: EventRef | null = null;
+  /** 已挂监听的 document（主窗口 + 各弹出窗口），同一 document 只挂一次 */
+  private _documents = new Set<Document>();
+  private _syncTimer: number | null = null;
   private lastTriggerTime = 0;
   private isActive = false;
 
@@ -30,9 +33,9 @@ export class GlobalInputListener {
     this.isActive = true;
     this.popup.create();
 
-    // 1. 全局 input 事件（input / textarea / contentEditable 等非 CM 输入）
+    // 1. 全局 input 事件（input / textarea / contentEditable / 插件自建 CM 编辑器）
     this._inputHandler = (e) => this.onInput(e);
-    document.addEventListener('input', this._inputHandler, true);
+    this.syncDocuments();
 
     // 2. Obsidian 编辑器变更事件（CodeMirror 6 不触发原生 input）
     this._editorChangeRef = this.plugin.app.workspace.on(
@@ -41,26 +44,99 @@ export class GlobalInputListener {
     );
     if (this._editorChangeRef) this.plugin.registerEvent(this._editorChangeRef);
 
+    // 3. 弹出窗口（popout）：每个窗口是独立 document，必须单独挂监听。
+    //    把标签页拖到第二屏后，主窗口的监听收不到任何输入事件。
+    this.plugin.registerEvent(
+      this.plugin.app.workspace.on('window-open', (_workspaceWin, win) => {
+        if (win && win.document) this.attachDocument(win.document);
+      }),
+    );
+    this.plugin.registerEvent(
+      this.plugin.app.workspace.on('window-close', (_workspaceWin, win) => {
+        if (win && win.document) {
+          this.detachDocument(win.document);
+          // 弹窗若依附在被关闭的窗口上，一并收起（节点随该 document 一起销毁）
+          this.popup.hide();
+        }
+      }),
+    );
+    // 4. 布局变化兜底：插件加载前就存在的窗口、或漏网的 document 重新同步一次（防抖）
+    this.plugin.registerEvent(
+      this.plugin.app.workspace.on('layout-change', () => this._scheduleSync()),
+    );
   }
 
   deactivate(): void {
     this.isActive = false;
-    if (this._inputHandler) {
-      document.removeEventListener('input', this._inputHandler, true);
-      this._inputHandler = null;
+    for (const doc of Array.from(this._documents)) this.detachDocument(doc);
+    this._documents.clear();
+    this._inputHandler = null;
+    if (this._syncTimer != null) {
+      window.clearTimeout(this._syncTimer);
+      this._syncTimer = null;
     }
-    // editor-change 由 registerEvent 自动清理
+    // editor-change / window-open / window-close / layout-change 由 registerEvent 自动清理
     this.popup.destroy();
   }
 
-  // ---- 非 CodeMirror 输入（input / textarea / contentEditable） ----
-  private onInput(_e: Event): void {
+  /** 主 document + 所有弹出窗口的 document，逐个挂/卸监听（幂等） */
+  syncDocuments(): void {
+    const docs = new Set<Document>([document]);
+    try {
+      this.plugin.app.workspace.iterateAllLeaves((leaf) => {
+        const d = leaf.view?.containerEl?.ownerDocument;
+        if (d) docs.add(d);
+      });
+    } catch (e) {
+      void e;
+    }
+    for (const doc of Array.from(this._documents)) {
+      if (!docs.has(doc)) this.detachDocument(doc);
+    }
+    for (const doc of docs) this.attachDocument(doc);
+  }
+
+  private attachDocument(doc: Document): void {
+    if (!this._inputHandler || this._documents.has(doc)) return;
+    doc.addEventListener('input', this._inputHandler, true);
+    this._documents.add(doc);
+  }
+
+  private detachDocument(doc: Document): void {
+    if (this._inputHandler) doc.removeEventListener('input', this._inputHandler, true);
+    this._documents.delete(doc);
+  }
+
+  private _scheduleSync(): void {
+    if (this._syncTimer != null) return;
+    this._syncTimer = window.setTimeout(() => {
+      this._syncTimer = null;
+      this.syncDocuments();
+    }, 500);
+  }
+
+  // ---- 全局 input 通道：input / textarea / contentEditable / 插件自建 CM 编辑器 ----
+  private onInput(e: Event): void {
     if (!this.plugin.settings.enabled) return;
-    const el = document.activeElement as HTMLElement | null;
+
+    // 穿透 shadow DOM 解析真实输入元素（宿主元素自身不可编辑，之前会直接跳过）；
+    // 事件自带所属 document —— 弹出窗口里的输入只会在该窗口的 document 上触发
+    const doc = (e.target as Node | null)?.ownerDocument ?? document;
+    const el = TextInserter.resolveInputTarget(e, doc);
     if (!el || !TextInserter.isEditable(el)) return;
-    if (TextInserter.isInExcludedContainer(el)) return;
-    // 跳过 CodeMirror 编辑器，由 onEditorChange 单独处理
-    if (TextInserter.getCodeMirrorView(el)) return;
+    if (
+      TextInserter.isInExcludedContainer(el, {
+        allowSearchPrompt: this.plugin.settings.enableInSearchPrompt,
+      })
+    ) {
+      return;
+    }
+    // Obsidian 自带编辑器交给 editor-change 通道（避免双通道重复处理）；
+    // 插件自建的 CM6 编辑器不触发 editor-change，必须在这里兜住 ——
+    // 之前是「凡 CM 一律 return」，导致第三方插件内嵌 CodeMirror 输入框完全无法补全。
+    // 注：若某个 CM 宿主同时被两条通道覆盖（如画布卡片），这里重复处理也是幂等的
+    //（同一列表 + 150ms 节流只重定位，不会重算或闪烁）。
+    if (TextInserter.getCodeMirrorView(el) && TextInserter.isWorkspaceEditor(el)) return;
 
     this._processText(TextInserter.getTextBeforeCursor(el), el, null);
   }
@@ -78,7 +154,11 @@ export class GlobalInputListener {
     // 用当前编辑器自身的 DOM 作为定位锚点（避免多窗格时取错第一个 .cm-editor）
     const cmDom =
       (editor as unknown as { containerEl?: HTMLElement }).containerEl || null;
-    this._processText(textBefore, cmDom || (document.activeElement as HTMLElement), editor);
+    // 兜底用「编辑器所在 document 中穿透 shadow DOM 的真实焦点」，
+    // 弹出窗口里编辑时不能取主窗口的 activeElement
+    const doc = cmDom?.ownerDocument ?? document;
+    const fallback = TextInserter.deepActiveElement(doc);
+    this._processText(textBefore, cmDom || fallback || doc.body, editor);
   }
 
   // ---- 统一处理逻辑 ----
@@ -177,6 +257,11 @@ export class GlobalInputListener {
     // 通过 editor.containerEl 找到 .cm-editor，用 EditorView.findFromDOM
     // （经 external 引入，运行时取 Obsidian 内部模块）解析出 EditorView，
     // 再用 coordsAtPos 获取光标的视口坐标（与 position:fixed 弹窗一致）。
+    //
+    // 测不到就返回 null：不要再做「内容区左上 +40px」之类的估算——
+    // 该兜底在 Live Preview 表格（光标在被 cm-table-widget 替换的区块内）等
+    // 场景会返回远离真实光标的假坐标；弹窗侧有可视光标锚点链兜底（见 suggestPopup）。
+    void fallbackEl;
     try {
       const containerEl = (editor as unknown as { containerEl?: HTMLElement }).containerEl;
       const view = containerEl ? TextInserter.getCodeMirrorView(containerEl) : null;
@@ -193,24 +278,6 @@ export class GlobalInputListener {
       }
     } catch (e) {
       void e;
-    }
-    // 回退：限定在触发本次补全的编辑器内估算，
-    // 避免多窗格时全局取到其他编辑器的第一个 .cm-content 导致弹窗定位跑偏
-    const scope = fallbackEl || (editor as unknown as { containerEl?: HTMLElement }).containerEl;
-    let contentEl: HTMLElement | null = null;
-    if (scope) {
-      const cmEl: HTMLElement | null =
-        scope.querySelector<HTMLElement>('.cm-editor') ||
-        (scope.classList.contains('cm-editor') ? scope : null);
-      contentEl =
-        (cmEl ? cmEl.querySelector<HTMLElement>('.cm-content') : null) ||
-        (scope.classList.contains('cm-content') ? scope : null) ||
-        cmEl ||
-        scope;
-    }
-    if (contentEl) {
-      const rect = contentEl.getBoundingClientRect();
-      return { x: rect.left + 40, y: rect.top + 40, height: 20 };
     }
     return null;
   }

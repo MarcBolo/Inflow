@@ -609,6 +609,12 @@
     display: none;
 }
 
+/* 弹窗依附于模态窗内输入面时：层级抬到该模态之上（默认在 --layer-modal 之下会被模态遮住）。
+   calc(modal + 1) 仍低于菜单/提示层，保证多模态叠加时不至于压到更高层的 UI */
+.blfc-suggest-popup.blfc-popup-in-modal {
+    z-index: calc(var(--layer-modal, 50) + 1);
+}
+
 /* 空态提示 */
 .blfc-suggest-empty {
     padding: 8px 12px;
@@ -659,6 +665,25 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+/* 名称允许收缩：长名称显示省略号而不撑破弹窗宽度 */
+.blfc-suggest-row > .blfc-suggest-name {
+    flex: 0 1 auto;
+    min-width: 0;
+}
+
+/* 描述：词条格式 {描述} 字段的内容，另起一行展示（最多两行、超出省略，悬停看全文） */
+.blfc-suggest-item .blfc-suggest-desc {
+    font-size: 11px;
+    line-height: 1.35;
+    color: var(--text-faint);
+    padding: 0 10px 2px 23px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
 }
 
 /* 建议预览 - 仅选中/悬停项展开，去掉原来的灰底+左边框重块 */
@@ -1128,11 +1153,132 @@
     color: var(--text-error);
 }
 
-/* 文本测量镜像（原 TextInserter 内联 cssText 迁移至此，与运行期复制的字体/宽度互不影响） */
+/* 文本测量镜像（原 TextInserter 内联 cssText 迁移至此，与运行期复制的字体互不影响）。
+   width:max-content + white-space:pre：镜像宽度即光标行文本真实宽度（不折行），
+   用于 input/textarea 光标横向精确定位 */
 .blfc-text-mirror {
     position: fixed;
     visibility: hidden;
-    white-space: pre-wrap;
-    word-wrap: break-word;
+    width: max-content;
+    white-space: pre;
+    word-break: normal;
+    overflow-wrap: normal;
+    padding: 0;
     z-index: -1;
+}
+
+/* ========== 词条格式：列表 / 行 / 实时预览 ========== */
+.blfc-plugin .blfc-ifmt-sample {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 8px 0 12px;
+}
+
+.blfc-plugin .blfc-ifmt-label {
+    flex: 0 0 auto;
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.blfc-plugin .blfc-ifmt-sample-input {
+    flex: 1 1 auto;
+    font-family: var(--font-monospace);
+    font-size: 13px;
+}
+
+.blfc-plugin .blfc-ifmt-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.blfc-plugin .blfc-ifmt-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 12px;
+    border: 1px solid var(--background-modifier-border);
+    border-left: 3px solid var(--background-modifier-border);
+    border-radius: var(--radius-s, 6px);
+    background: var(--background-secondary);
+}
+
+.blfc-plugin .blfc-ifmt-row-hit {
+    border-left-color: var(--interactive-accent);
+}
+
+.blfc-plugin .blfc-ifmt-row-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.blfc-plugin .blfc-ifmt-name {
+    flex: 0 0 150px;
+    font-size: 13px;
+}
+
+.blfc-plugin .blfc-ifmt-tpl {
+    flex: 1 1 220px;
+    min-width: 160px;
+    font-family: var(--font-monospace);
+    font-size: 13px;
+}
+
+.blfc-plugin .blfc-ifmt-tpl.blfc-ifmt-err {
+    border-color: var(--text-error);
+}
+
+.blfc-plugin .blfc-ifmt-fields {
+    display: flex;
+    gap: 4px;
+}
+
+.blfc-plugin .blfc-ifmt-field-btn {
+    padding: 2px 6px;
+    min-height: 22px;
+    font-size: 12px;
+    font-family: var(--font-monospace);
+    line-height: 1.2;
+}
+
+.blfc-plugin .blfc-ifmt-ops {
+    display: flex;
+    gap: 4px;
+    margin-left: auto;
+}
+
+.blfc-plugin .blfc-ifmt-ops button {
+    padding: 2px 8px;
+    min-height: 22px;
+    font-size: 12px;
+}
+
+.blfc-plugin .blfc-ifmt-del {
+    color: var(--text-error);
+}
+
+.blfc-plugin .blfc-ifmt-preview {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-family: var(--font-monospace);
+    word-break: break-all;
+}
+
+.blfc-plugin .blfc-ifmt-preview-err {
+    color: var(--text-error);
+}
+
+.blfc-plugin .blfc-ifmt-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.blfc-plugin .blfc-ifmt-warn {
+    color: var(--text-warning, var(--text-error));
+    font-size: 12px;
+    word-break: break-all;
 }

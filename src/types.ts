@@ -64,6 +64,11 @@ export interface Suggestion {
   group?: string;
   /** 稳定标识：格式条目的 item.id（智能补全不携带） */
   id?: string;
+  /**
+   * 描述：词条格式里 {描述} 字段的内容，弹窗在名称右侧淡色常驻展示。
+   * 仅智能补全的词条携带；格式模板条目不带此字段。
+   */
+  description?: string;
 }
 
 /** 场景重编号结果 */
@@ -87,6 +92,12 @@ export interface BLFormatCompleterSettings {
   enableSmartCompletion: boolean;
   enableContextAware: boolean;
   enableMinimalTrigger: boolean;
+  /**
+   * 是否在「搜索类」弹窗（Obsidian 命令面板 / 快速切换 / 第三方 SuggestModal）中
+   * 也触发补全。默认 false：这类框输入的是命令名/文件名，刷出剧本候选意义不大，
+   * 且它们自带键盘消费。第三方插件若把普通输入框做成 SuggestModal，可开启此项。
+   */
+  enableInSearchPrompt: boolean;
   enablePinyin: boolean;
   smartMinLength: number;
   smartMaxSuggestions: number;
@@ -200,4 +211,35 @@ export interface FormatRenderResult {
   /** ${0:默认词} 的选中区间（相对 text 起点）；无则 null */
   selectFrom?: number | null;
   selectTo?: number | null;
+}
+
+// ============ 词条格式数据模型（.inflow/itemFormats.json） ============
+
+/** 词条字段角色：模板占位符可引用的三个语义位 */
+export type ItemFieldRole = 'display' | 'insert' | 'description';
+
+/**
+ * 一条词条格式 = 用户自定义的「一行词条长什么样」。
+ * template 里 {显示}/{插入}/{描述}（或 display/insert/description）是字段占位符，
+ * 其余字符自动成为分隔符 —— 段数、段序、分隔符全部由模板决定，代码零硬编码。
+ */
+export interface ItemFormat {
+  id: string;
+  name: string;
+  template: string;
+}
+
+/** itemFormats.json 顶层结构（无任何内置预置） */
+export interface ItemFormatsFile {
+  version: number;
+  formats: ItemFormat[];
+}
+
+/** 一行词条按某条格式解析出的结果 */
+export interface ParsedItemLine {
+  display: string;
+  insert: string;
+  description?: string;
+  /** 命中的格式 id（诊断 / 预览用） */
+  formatId: string;
 }

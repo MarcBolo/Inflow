@@ -6,7 +6,7 @@ import type { App } from 'obsidian';
 import { LibraryEdgeStrips } from './quickPanel';
 import { FormatItemEditModal, FormatsTransferModal } from './formatModals';
 import type { SimpleScriptCompleter } from './main';
-import type { FormatItem } from './types';
+import type { FormatItem, ItemFormat } from './types';
 import { MAX_QUICK_COMMANDS } from './formatsManager';
 import { DEFAULT_LIBRARY_PALETTE } from './constants';
 
@@ -167,6 +167,60 @@ class ConfirmModal extends Modal {
   }
 }
 
+/** 词条格式 JSON 导入 / 导出弹窗（textarea，规避剪贴板权限差异） */
+class ItemFormatsTransferModal extends Modal {
+  constructor(
+    app: App,
+    private plugin: SimpleScriptCompleter,
+    private onDone: () => void,
+  ) {
+    super(app);
+  }
+
+  override onOpen(): void {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.addClass('blfc-plugin');
+    contentEl.createEl('h3', { text: '词条格式 导入 / 导出' });
+    contentEl.createEl('p', {
+      text: '上方是当前配置（itemFormats.json）：可直接复制备份；粘贴一份配置后点「导入」即覆盖。',
+      cls: 'blfc-fmt-transfer-desc',
+    });
+
+    const ta = contentEl.createEl('textarea', { cls: 'blfc-fmt-transfer-textarea' });
+    ta.value = this.plugin.itemFormatsManager.exportJson();
+    ta.rows = 16;
+    ta.addEventListener('keydown', (e) => e.stopPropagation());
+
+    new Setting(contentEl)
+      .addButton((btn) =>
+        btn.setButtonText('复制配置').onClick(() => {
+          ta.select();
+          document.execCommand('copy');
+          new Notice('已复制到剪贴板');
+        }),
+      )
+      .addButton((btn) =>
+        btn
+          .setButtonText('导入')
+          .setCta()
+          .onClick(() => {
+            const res = this.plugin.itemFormatsManager.importJson(ta.value);
+            new Notice(res.message);
+            if (res.ok) {
+              this.onDone();
+              this.close();
+            }
+          }),
+      )
+      .addButton((btn) => btn.setButtonText('关闭').onClick(() => this.close()));
+  }
+
+  override onClose(): void {
+    this.contentEl.empty();
+  }
+}
+
 export class SimpleScriptSettingTab extends PluginSettingTab {
   private libraryTableContainer!: HTMLElement;
   /** 模板库设置区块容器（内容全部动态重建） */
@@ -182,6 +236,8 @@ export class SimpleScriptSettingTab extends PluginSettingTab {
   private showLibraryList = false;
   /** 二级页面导航状态：true=正在查看「词库参考」页（词库格式说明） */
   private showLibraryReference = false;
+  /** 二级页面导航状态：true=正在查看「词条格式」页（词条行语法配置） */
+  private showItemFormats = false;
 
   display(): void {
     const { containerEl } = this;
@@ -203,6 +259,11 @@ export class SimpleScriptSettingTab extends PluginSettingTab {
     // 二级页面（词库参考：词库格式说明）会话保持
     if (this.showLibraryReference) {
       this.renderReferenceSubpage();
+      return;
+    }
+    // 二级页面（词条格式：词条行语法配置）会话保持
+    if (this.showItemFormats) {
+      this.renderItemFormatsSubpage();
       return;
     }
 
@@ -260,6 +321,19 @@ export class SimpleScriptSettingTab extends PluginSettingTab {
       .addToggle((toggle) =>
         toggle.setValue(this.plugin.settings.enableMinimalTrigger).onChange(async (value) => {
           this.plugin.settings.enableMinimalTrigger = value;
+          await this.plugin.saveSettings();
+        }),
+      );
+
+    new Setting(containerEl)
+      .setName('搜索类弹窗中也补全')
+      .setDesc(
+        '命令面板 / 快速切换 / 第三方 SuggestModal 等「搜索类」弹窗内也触发补全。'
+          + '第三方插件把普通输入框做成 SuggestModal 时可开启；默认关闭以免命令名被剧本候选刷屏',
+      )
+      .addToggle((toggle) =>
+        toggle.setValue(this.plugin.settings.enableInSearchPrompt).onChange(async (value) => {
+          this.plugin.settings.enableInSearchPrompt = value;
           await this.plugin.saveSettings();
         }),
       );
@@ -377,6 +451,9 @@ export class SimpleScriptSettingTab extends PluginSettingTab {
 
     // ========== 第四部分：词库管理（配置主区；词库列表在二级页） ==========
     this.renderLibraryOverview();
+
+    // ========== 第四部分之二：词条格式（入口卡片；语法配置在二级页） ==========
+    this.renderItemFormatsOverview();
 
     // ========== 第五部分：词库参考（入口卡片；词库格式说明在二级页） ==========
     this.renderReferenceOverview();
@@ -527,6 +604,7 @@ export class SimpleScriptSettingTab extends PluginSettingTab {
     this.activeGroupId = null;
     this.showLibraryList = false;
     this.showLibraryReference = false;
+    this.showItemFormats = false;
     this.display();
   }
 
@@ -539,6 +617,12 @@ export class SimpleScriptSettingTab extends PluginSettingTab {
   /** 进入「词库参考」二级页（词库格式说明） */
   goToReference(): void {
     this.showLibraryReference = true;
+    this.display();
+  }
+
+  /** 进入「词条格式」二级页（词条行语法配置） */
+  goToItemFormats(): void {
+    this.showItemFormats = true;
     this.display();
   }
 
@@ -944,12 +1028,307 @@ sad|sad|悲伤的`,
         else li.createEl(p.tag, { text: p.text });
       });
     };
-    addRich([{ tag: 'strong', text: '简单格式：' }, { tag: 'code', text: '词条' }, '（显示与插入文本相同）']);
-    addRich([{ tag: 'strong', text: '增强格式：' }, { tag: 'code', text: '显示文本|插入文本' }]);
-    addRich([{ tag: 'strong', text: '带描述：' }, { tag: 'code', text: '显示文本|插入文本|描述' }, '（描述可选，仅提示用）']);
+    addRich([
+      '词条写法由你在「词条格式」里配置的模板决定，不再固定。默认提供三条：',
+      { tag: 'code', text: '词条' },
+      '、',
+      { tag: 'code', text: '显示文本|插入文本' },
+      '、',
+      { tag: 'code', text: '显示文本|插入文本|描述' },
+    ]);
+    addRich([
+      '模板里 ',
+      { tag: 'code', text: '{显示}' },
+      ' ',
+      { tag: 'code', text: '{插入}' },
+      ' ',
+      { tag: 'code', text: '{描述}' },
+      ' 是字段占位符，其余字符自动成为分隔符',
+    ]);
     addRich(['支持列表标记（', { tag: 'code', text: '-' }, ' 或 ', { tag: 'code', text: '*' }, '）开头']);
     addRich(['支持 YAML 元数据（文件开头用 ', { tag: 'code', text: '---' }, ' 包裹）']);
     addRich(['类别（', { tag: 'code', text: '##' }, '）可自由命名；', { tag: 'code', text: '###' }, ' 三级标题归入最近一个二级类别，不另起类别']);
+
+    const toItemFormatsBtn = doc.createEl('button', {
+      text: '去配置词条格式 ›',
+      title: '打开词条格式页，自定义一行词条如何切分',
+      cls: 'blfc-lib-entry-btn',
+    });
+    toItemFormatsBtn.addEventListener('click', () => this.goToItemFormats());
+  }
+
+  // ========== 词条格式：主区（入口卡片）+ 二级页（模板配置） ==========
+
+  /** 主区渲染：词条格式卡片——标题栏（二级页入口）+ 当前格式概览 */
+  private renderItemFormatsOverview(): void {
+    const { containerEl } = this;
+    const area = containerEl.createDiv({ cls: 'blfc-lib-area' });
+
+    const header = area.createDiv({ cls: 'blfc-lib-header' });
+    header.createSpan({ text: '词条格式', cls: 'blfc-lib-title' });
+    const entryBtn = header.createEl('button', {
+      text: '配置词条格式 ›',
+      title: '定义一行词条如何切分为显示 / 插入 / 描述',
+      cls: 'blfc-lib-entry-btn',
+    });
+    entryBtn.addEventListener('click', () => this.goToItemFormats());
+
+    const formats = this.plugin.itemFormatsManager.formats;
+    if (formats.length === 0) {
+      area.createDiv({
+        cls: 'blfc-fmt-hint blfc-ifmt-warn',
+        text: '当前没有任何词条格式 —— 词库将解析不出任何词条。',
+      });
+      return;
+    }
+    area.createDiv({
+      cls: 'blfc-fmt-hint',
+      text: `共 ${formats.length} 条，按顺序尝试、第一条匹配的生效：${formats
+        .map((f) => f.template)
+        .join('　/　')}`,
+    });
+  }
+
+  /** 词条格式变更后：重载词库（按新模板重新解析）并重建补全索引 */
+  private async afterItemFormatsChanged(): Promise<void> {
+    await this.plugin.libraryManager.reloadLibraries();
+    await this.plugin.buildSmartCompletionIndex();
+    this.plugin.updateStatusBar();
+    if (this.plugin.quickPanel) this.plugin.quickPanel.refresh();
+  }
+
+  /** 交换格式顺序（决定解析优先级） */
+  private async moveItemFormat(index: number, delta: number): Promise<void> {
+    await this.plugin.itemFormatsManager.mutate((draft) => {
+      const target = index + delta;
+      if (target < 0 || target >= draft.formats.length) return;
+      const [moved] = draft.formats.splice(index, 1);
+      draft.formats.splice(target, 0, moved);
+    });
+    await this.afterItemFormatsChanged();
+  }
+
+  /** 渲染「词条格式」二级页面（替换整页内容） */
+  private renderItemFormatsSubpage(): void {
+    const { containerEl } = this;
+    containerEl.empty();
+    containerEl.addClass('blfc-plugin');
+
+    const nav = containerEl.createDiv({ cls: 'blfc-fmt-subnav' });
+    const backBtn = nav.createEl('button', { text: '返回', cls: 'blfc-fmt-btn' });
+    backBtn.addEventListener('click', () => this.backToOverview());
+    nav.createSpan({ text: '词条格式', cls: 'blfc-fmt-subnav-crumb' });
+    nav.createSpan({ text: '› 词条行语法', cls: 'blfc-fmt-subnav-crumb' });
+
+    new Setting(containerEl).setName('词条格式').setHeading();
+    containerEl.createDiv({
+      cls: 'blfc-fmt-hint',
+      text: '一行词条怎么切分，完全由下面的模板决定：{显示} {插入} {描述} 是字段占位符，模板里的其他字符自动成为分隔符。解析时自上而下尝试，第一条匹配的生效 —— 精确的模板放前面，宽松的（如只有 {显示}）垫底。',
+    });
+    containerEl.createDiv({
+      cls: 'blfc-fmt-hint',
+      text: '字段缺省时的回退：未写 {插入} → 取显示文本；未写 {描述} → 空。删光全部格式后，词库将解析不出任何词条。',
+    });
+
+    // —— 示例词条：所有格式的实时预览共用这一行 ——
+    const sampleRow = containerEl.createDiv({ cls: 'blfc-ifmt-sample' });
+    sampleRow.createEl('label', { text: '示例词条', cls: 'blfc-ifmt-label' });
+    const sampleInput = sampleRow.createEl('input', {
+      type: 'text',
+      cls: 'blfc-ifmt-sample-input',
+      placeholder: '贴一行词库里的词条，实时看它被哪条格式命中',
+    });
+    sampleInput.value = '天材地宝|天材地宝|珍贵的修炼资源';
+
+    const listWrap = containerEl.createDiv({ cls: 'blfc-ifmt-list' });
+
+    const renderList = (): void => {
+      listWrap.empty();
+      const formats = this.plugin.itemFormatsManager.formats;
+      const sample = sampleInput.value;
+
+      if (formats.length === 0) {
+        listWrap.createEl('p', {
+          cls: 'blfc-lib-empty',
+          text: '还没有任何词条格式。点下面的「新增格式」开始。',
+        });
+      }
+
+      const hitId =
+        this.plugin.itemFormatsManager.explainLine(sample).find((e) => e.matched)?.format.id ??
+        null;
+
+      formats.forEach((fmt, index) => {
+        this.renderItemFormatRow(listWrap, fmt, index, formats.length, sample, hitId, renderList);
+      });
+
+      const actions = listWrap.createDiv({ cls: 'blfc-ifmt-actions' });
+
+      const addBtn = actions.createEl('button', { text: '+ 新增格式', cls: 'mod-cta' });
+      addBtn.addEventListener('click', () => {
+        void (async () => {
+          await this.plugin.itemFormatsManager.mutate((draft) => {
+            draft.formats.push({
+              id: this.plugin.itemFormatsManager.newCustomId(),
+              name: '新格式',
+              template: '{显示}|{插入}',
+            });
+          });
+          await this.afterItemFormatsChanged();
+          renderList();
+        })();
+      });
+
+      const transferBtn = actions.createEl('button', { text: '导入 / 导出' });
+      transferBtn.addEventListener('click', () => {
+        new ItemFormatsTransferModal(this.app, this.plugin, () => {
+          void (async () => {
+            await this.afterItemFormatsChanged();
+            renderList();
+          })();
+        }).open();
+      });
+
+      // 解析失败提示：模板改动后可能有行没人认领，给出示例便于定位
+      const failCount = this.plugin.libraryManager.parseFailureCount;
+      if (failCount > 0) {
+        const samples = this.plugin.libraryManager.parseFailures.slice(0, 5);
+        const warn = listWrap.createDiv({ cls: 'blfc-ifmt-warn' });
+        warn.setText(
+          `⚠ 当前词库有 ${failCount} 行未被任何格式匹配（已跳过）` +
+            (samples.length ? `：${samples.join(' ｜ ')}` : ''),
+        );
+      }
+    };
+
+    sampleInput.addEventListener('input', renderList);
+    renderList();
+  }
+
+  /** 渲染单条格式：名称 / 模板 / 排序删除 / 逐条实时预览 */
+  private renderItemFormatRow(
+    parent: HTMLElement,
+    fmt: ItemFormat,
+    index: number,
+    total: number,
+    sample: string,
+    hitId: string | null,
+    refresh: () => void,
+  ): void {
+    const row = parent.createDiv({ cls: 'blfc-ifmt-row' });
+    if (fmt.id === hitId) row.addClass('blfc-ifmt-row-hit');
+
+    const top = row.createDiv({ cls: 'blfc-ifmt-row-top' });
+
+    const nameInput = top.createEl('input', {
+      type: 'text',
+      cls: 'blfc-ifmt-name',
+      placeholder: '格式名称',
+    });
+    nameInput.value = fmt.name;
+
+    const tplInput = top.createEl('input', {
+      type: 'text',
+      cls: 'blfc-ifmt-tpl',
+      placeholder: '{显示}|{插入}|{描述}',
+    });
+    tplInput.value = fmt.template;
+
+    const preview = row.createDiv({ cls: 'blfc-ifmt-preview' });
+
+    /** 只刷新本行预览：不落盘、不重建列表 */
+    const previewLine = (): void => {
+      const template = tplInput.value.trim();
+      const check = this.plugin.itemFormatsManager.validateTemplate(template);
+      preview.removeClass('blfc-ifmt-preview-err');
+      if (!check.ok) {
+        preview.setText(`模板无效：${check.message}`);
+        preview.addClass('blfc-ifmt-preview-err');
+        return;
+      }
+      const parsed = this.plugin.itemFormatsManager.parseLineWithTemplate(template, sample);
+      if (!parsed) {
+        preview.setText('未命中该示例行');
+        return;
+      }
+      preview.setText(
+        `命中 → 显示「${parsed.display}」· 插入「${parsed.insert}」· 描述「${
+          parsed.description || '（空）'
+        }」`,
+      );
+    };
+
+    // 字段快捷插入：在光标处补 {显示} / {插入} / {描述}
+    const fieldBox = top.createDiv({ cls: 'blfc-ifmt-fields' });
+    (['显示', '插入', '描述'] as const).forEach((field) => {
+      const fieldBtn = fieldBox.createEl('button', {
+        text: `{${field}}`,
+        cls: 'blfc-ifmt-field-btn',
+        title: `在光标处插入 {${field}}`,
+      });
+      fieldBtn.addEventListener('click', () => {
+        const pos = tplInput.selectionStart ?? tplInput.value.length;
+        tplInput.value = tplInput.value.slice(0, pos) + `{${field}}` + tplInput.value.slice(pos);
+        previewLine();
+        tplInput.focus();
+      });
+    });
+
+    const ops = top.createDiv({ cls: 'blfc-ifmt-ops' });
+    const upBtn = ops.createEl('button', { text: '↑', title: '上移（更优先）' });
+    upBtn.disabled = index === 0;
+    upBtn.addEventListener('click', () => {
+      void (async () => {
+        await this.moveItemFormat(index, -1);
+        refresh();
+      })();
+    });
+    const downBtn = ops.createEl('button', { text: '↓', title: '下移' });
+    downBtn.disabled = index === total - 1;
+    downBtn.addEventListener('click', () => {
+      void (async () => {
+        await this.moveItemFormat(index, 1);
+        refresh();
+      })();
+    });
+    const delBtn = ops.createEl('button', { text: '删除', cls: 'blfc-ifmt-del' });
+    delBtn.addEventListener('click', () => {
+      void (async () => {
+        await this.plugin.itemFormatsManager.mutate((draft) => {
+          draft.formats = draft.formats.filter((x) => x.id !== fmt.id);
+        });
+        await this.afterItemFormatsChanged();
+        refresh();
+      })();
+    });
+
+    /** 落盘（失焦 / 回车触发）：校验通过才写入 */
+    const commit = (): void => {
+      const template = tplInput.value.trim();
+      const check = this.plugin.itemFormatsManager.validateTemplate(template);
+      if (!check.ok) {
+        previewLine();
+        return;
+      }
+      const name = nameInput.value.trim() || '未命名格式';
+      void (async () => {
+        await this.plugin.itemFormatsManager.mutate((draft) => {
+          const target = draft.formats.find((x) => x.id === fmt.id);
+          if (target) {
+            target.name = name;
+            target.template = template;
+          }
+        });
+        await this.afterItemFormatsChanged();
+        refresh();
+      })();
+    };
+
+    tplInput.addEventListener('input', previewLine);
+    tplInput.addEventListener('change', commit);
+    nameInput.addEventListener('change', commit);
+
+    previewLine();
   }
 
   // ========== 词库管理：主区（配置卡片）+ 二级页（词库列表） ==========
