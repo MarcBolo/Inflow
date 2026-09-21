@@ -3,7 +3,7 @@
  */
 import { TextInserter } from './textInserter';
 import { FloatingSuggestPopup } from './suggestPopup';
-import { offsetToLineCh } from './formatEngine';
+import { offsetToLineCh, renderFormatTemplate } from './formatEngine';
 import type { Suggestion } from './types';
 import type { SimpleScriptCompleter } from './main';
 import type { Editor, EventRef } from 'obsidian';
@@ -25,7 +25,14 @@ export class GlobalInputListener {
   private isActive = false;
 
   constructor(private plugin: SimpleScriptCompleter) {
-    this.popup = new FloatingSuggestPopup(plugin);
+    // 预览渲染器：词条模板在候选面板中直接求值成"即将插入的文本"（{time} → 15:20）。
+    // 只传默认场景类型与当前时间，不扫描文档、不取选区，保证渲染无副作用且开销可忽略；
+    // 含 {episode}/{scene} 的词条预览回退为 1.1，实际插入仍按光标位置精确计算。
+    this.popup = new FloatingSuggestPopup(plugin, (template) =>
+      renderFormatTemplate(template, {
+        sceneType: plugin.settings.defaultSceneType,
+      }).text,
+    );
   }
 
   activate(): void {

@@ -14,6 +14,12 @@ interface CursorPos {
 /** 第二参数为触发/前缀字符（@ / ~ 或智能补全的查询字），插入时用它计算要覆盖的长度 */
 type SelectCallback = (suggestion: Suggestion, prefixChar: string) => void;
 type CloseCallback = () => void;
+/**
+ * 预览渲染器：把词条 insert/template 原文求值成"即将插入的文本"再展示，
+ * 实现候选面板所见即所得（如 {time} 显示为 15:20 而非变量名）。
+ * 缺省时不渲染，预览保持原文。
+ */
+export type PreviewRenderer = (template: string) => string;
 
 export class FloatingSuggestPopup {
   private container: HTMLElement | null = null;
@@ -46,7 +52,10 @@ export class FloatingSuggestPopup {
    */
   private armed = false;
 
-  constructor(private plugin: unknown) {
+  constructor(
+    private plugin: unknown,
+    private previewRenderer?: PreviewRenderer,
+  ) {
     void plugin;
   }
 
@@ -231,8 +240,15 @@ export class FloatingSuggestPopup {
 
     // 预览：默认隐藏，仅在选中/悬停时展开（渐进式披露，避免弹窗被重复色块淹没）。
     // 插入内容与显示文本完全相同时（词条格式未配 {插入}、回退为显示文本）不再重复展示。
-    const preview = (suggestion.insert || suggestion.template || '').trim();
-    if (preview && preview !== displayText.trim()) {
+    // 配置了预览渲染器时，先把模板原文求值成"即将插入的文本"（如 {time} → 15:20）再展示。
+    const rawPreview = (suggestion.insert || suggestion.template || '').trim();
+    if (rawPreview && rawPreview !== displayText.trim()) {
+      let preview = rawPreview;
+      if (this.previewRenderer) {
+        const rendered = this.previewRenderer(rawPreview).trim();
+        // 求值后为空（如 {selection} 无选区）或与显示文本重合时退化为不展示预览
+        if (rendered && rendered !== displayText.trim()) preview = rendered;
+      }
       const previewEl = el.createDiv();
       previewEl.textContent = preview;
       previewEl.className = 'blfc-suggest-preview';

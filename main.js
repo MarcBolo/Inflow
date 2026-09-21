@@ -1558,8 +1558,9 @@ var TextInserter = _TextInserter;
 
 // src/suggestPopup.ts
 var FloatingSuggestPopup = class {
-  constructor(plugin) {
+  constructor(plugin, previewRenderer) {
     this.plugin = plugin;
+    this.previewRenderer = previewRenderer;
     this.container = null;
     this.items = [];
     this.selectedIndex = 0;
@@ -1731,8 +1732,13 @@ var FloatingSuggestPopup = class {
       descEl.title = descText;
       el.appendChild(descEl);
     }
-    const preview = (suggestion.insert || suggestion.template || "").trim();
-    if (preview && preview !== displayText.trim()) {
+    const rawPreview = (suggestion.insert || suggestion.template || "").trim();
+    if (rawPreview && rawPreview !== displayText.trim()) {
+      let preview = rawPreview;
+      if (this.previewRenderer) {
+        const rendered = this.previewRenderer(rawPreview).trim();
+        if (rendered && rendered !== displayText.trim()) preview = rendered;
+      }
       const previewEl = el.createDiv();
       previewEl.textContent = preview;
       previewEl.className = "blfc-suggest-preview";
@@ -2308,7 +2314,12 @@ var GlobalInputListener = class {
     this._syncTimer = null;
     this.lastTriggerTime = 0;
     this.isActive = false;
-    this.popup = new FloatingSuggestPopup(plugin);
+    this.popup = new FloatingSuggestPopup(
+      plugin,
+      (template) => renderFormatTemplate(template, {
+        sceneType: plugin.settings.defaultSceneType
+      }).text
+    );
   }
   activate() {
     if (this.isActive) return;
