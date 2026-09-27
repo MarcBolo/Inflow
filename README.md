@@ -1,10 +1,7 @@
 # InFlow
 
-> 让词库的灵感流入笔尖 —— Obsidian 写作补全插件
+> InFlow 是一枚让词库的灵感流入笔尖 —— Obsidian 写作补全插件。它把你积累的词库变成写作时的即时联想，并把常用格式做成"输入一个符号即可插入"的模板菜单。
 
-InFlow 是一枚 Obsidian 桌面插件。它把你积累的词库（角色、场景、台词、镜头术语、单词……）变成写作时的即时联想，并把场景标题、角色行等常用格式做成"输入一个符号即可插入"的模板菜单。
-
-- 插件 ID：`inflow` ｜ 当前版本：**1.0.1** ｜ 要求：Obsidian ≥ 0.15.0（仅桌面端）
 - 无任何内置词库与模板预置：内容全部由你自己建立，插件升级**永不注入或覆盖**你的数据
 
 ---
@@ -43,83 +40,54 @@ npm run typecheck    # tsc --noEmit 类型检查
 
 ---
 
-## 快速上手
+## License
 
-**首次配置（约 2 分钟）**
-
-1. **建词库**：新建文件夹（如 `词库`），用命令面板「创建新词库文件」生成示例骨架，或手写（格式见下）。
-2. **指路径**：设置 → 词库管理 → 词库文件夹 填 `词库`。
-3. **验证**：左下角状态栏出现 `词库名(条数)` 即成功。
-
-**每天写作时**
-
-- 输入几个字（或拼音首字母）→ `↑↓` 选 → `Enter` 插入；
-- 输入 `@` → 弹出格式模板菜单；
-- 点编辑器左缘彩条切换词库。
-
-**词库文件长这样**（一个 `.md` = 一个词库，文件名即词库名）：
-
-```markdown
-# 我的词库
-
-## 角色
-主角|林风|普通少年，意外获得修仙传承
-
-## 景别
-特写|特写|肩部以上，强调内心活动
-
-## 英语单词
-happy|happy|快乐的
-```
-
-词条支持三种写法：`词条` / `显示|插入` / `显示|插入|描述`；`##` 类别标题可自由命名（中英别名会自动归一，见使用文档附录）；`###` 小标题并入父类别。
+MIT
 
 ---
 
-## 命令一览
+# InFlow (English)
 
-命令面板中均以 `InFlow:` 前缀显示，快捷键可在"设置 → 快捷键"中修改：
+> Let your lexicon flow into your writing — a completion plugin for Obsidian screenwriting / fiction
 
-| 命令 | 默认快捷键 | 说明 |
-|---|---|---|
-| 打开模板菜单 | — | 弹出全部分组的模板菜单 |
-| 插入模板 · 直达 1–4 | — | 直达某分组菜单（最多 4 条，在分组管理中配置） |
-| 插入角色对话 | `Ctrl/Cmd+Shift+D` | 光标处插入 `对话内容` |
-| 重新编号当前集场景 | — | 重排光标所在"第 N 集"的场景号 |
-| 重新编号整个文档 | — | 所有集各自从 1 重排 |
-| 切换词库 / 打开词库选择器 | — | 弹出词库切换器 |
-| 重新加载词库 | — | 重载全部词库并重建补全索引 |
-| 打开词库文件夹 | — | 在文件树定位词库目录 |
-| 创建新词库文件 | — | 生成示例词库骨架 |
-| 插入时间戳 | `Ctrl/Cmd+Shift+;`、`Ctrl/Cmd+Alt+T` | 插入 `YYYY-MM-DD-HH:mm` |
-| 写入时间戳到 frontmatter | — | 写 `created` / `updated` |
-| 用时间戳创建新笔记 | — | 新建带时间戳名的笔记 |
-| 调试索引状态 | — | 弹窗查看索引/类别统计（排查用） |
+InFlow is a desktop plugin for Obsidian aimed at **screenwriters, novelists and video-script writers**. It turns the lexicon you build up (characters, locations, dialogue, camera terms, vocabulary…) into instant suggestions while you write, and turns recurring formats such as scene headings and character lines into "type one symbol to insert" template menus.
+
+- Plugin ID: `inflow` | Current version: **1.0.0** | Requires: Obsidian ≥ 0.15.0 (desktop only)
+- No built-in lexicon or template presets: you create all the content yourself, and plugin updates **never inject or overwrite** your data
 
 ---
 
-## 数据与文件
+## Features
 
-| 内容 | 位置 |
+| Capability | Description |
 |---|---|
-| 词库 | 词库文件夹内的 `.md` 文件（自行指定，如 `词库/`） |
-| 格式模板 | `<vault>/.inflow/formats.json`（随库备份） |
-| 插件设置 / 使用频次 / 彩条样式 | `<vault>/.obsidian/plugins/inflow/data.json` |
-| 插件本体 | `<vault>/.obsidian/plugins/inflow/` |
-
-备份与迁移：复制词库文件夹 + `.inflow/formats.json` 即可；模板配置也可在"设置 → 格式模板 → 高级"里导出 / 导入 JSON。
+| **Smart lexicon completion** | Start typing to get suggestions from your lexicon: matches Chinese, English, **pinyin initials** (`lf` → 林风) and description text; exact, prefix and fuzzy-subsequence recall tiers |
+| **Context awareness** | Detects `##` scene headings / `####` character names / action lines and suggests only what fits the current context; custom categories are always available |
+| **Format templates** | Name and group your recurring snippets; typing a trigger character (default `@`, or per-group) opens a menu that inserts them in one click; templates support variables, `$0` cursor placement, multiple lines and escapes |
+| **Automatic scene numbering** | The `{episode}` and `{scene}` variables count episodes and scenes automatically; renumber the current episode or the whole document with one command |
+| **Lexicon colour strips** | One strip per lexicon along the left edge of the editor — click to switch; every strip can have its own colour and icon |
+| **Timestamp tools** | Insert a timestamp at the cursor, write it into frontmatter, or create a note named by timestamp (3 commands) |
+| **Every input field** | Completion is not limited to the editor: any input / textarea / rich-text field works (Obsidian title bar, search box, …) |
+| **Adaptive ranking** | Your selections are counted, so frequently used entries float to the top (MRU) |
 
 ---
 
-## 设计要点（给开发者）
+## Installation
 
-- **全局输入监听替代 EditorSuggest**：同时监听原生 `input` 事件与 Obsidian `editor-change`，一套建议管线覆盖 CM6 编辑器与所有第三方输入框；对插件自身弹窗/通知区域做排除。
-- **悬浮弹窗自绘**：按光标坐标定位、视口避让、滚动跟随；IME 组字期间不拦截按键；空查询弹窗区分"未导航回车=换行"。
-- **补全索引**：前缀 + 后缀双索引（查询形状是"当前词后缀"），键长封顶 6；精确/前缀/拼音全部零命中时做**子序列模糊兜底**（容忍漏字）。
-- **拼音匹配零字典**：借助 `Intl.Collator('zh-Hans-CN-u-co-pinyin')` + 代表字表二分定位首字母，无内置汉字拼音表；ICU 不支持时自动降级不报错。
-- **模板 DSL**：`{date}` `{datetime}` `{selection}` `{scenetype}` `{episode}` `{scene}` 变量 + `$0` / `${0:默认词}` 光标控制 + `\{ \} \$ \\` 转义；未知变量原样输出不吞字。
-- **数据驱动**：词库 = 普通 Markdown（章节标题即类别，中英别名归一）；模板 = `formats.json` v4 无内置结构（升级永不注入）。
+Until the plugin is available in the community store, install it manually:
 
+1. Download or build the plugin to get an `inflow` folder (containing `main.js`, `manifest.json` and `styles.css`).
+2. Put it in your vault: `<your vault>/.obsidian/plugins/inflow/` (if there is no `plugins` folder yet, enable community plugins first to create it).
+3. In Obsidian: Settings → Community plugins → reload the list → enable **InFlow**.
+
+### Build from source
+
+```bash
+npm install          # install dependencies
+npm run build        # production build (main.js)
+npm run dev          # watch-mode development build
+npm run typecheck    # tsc --noEmit type check
+```
 ---
 
 ## 📄 License

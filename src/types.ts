@@ -93,6 +93,12 @@ export interface BLFormatCompleterSettings {
   enableContextAware: boolean;
   enableMinimalTrigger: boolean;
   /**
+   * 是否使用 Enter 键提交（确认）弹窗中高亮的补全词条。
+   * 默认 true：与历史行为一致，弹窗中按 Enter 直接确认选中项。
+   * 关闭后，Enter 仅作为换行放行给编辑器，须用鼠标点击候选来确认。
+   */
+  enableEnterSubmit: boolean;
+  /**
    * 是否在「搜索类」弹窗（Obsidian 命令面板 / 快速切换 / 第三方 SuggestModal）中
    * 也触发补全。默认 false：这类框输入的是命令名/文件名，刷出剧本候选意义不大，
    * 且它们自带键盘消费。第三方插件若把普通输入框做成 SuggestModal，可开启此项。

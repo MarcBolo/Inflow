@@ -170,6 +170,8 @@ export class FormatsTransferModal extends Modal {
     app: App,
     private plugin: SimpleScriptCompleter,
     mode: 'export' | 'import',
+    /** 导入成功后回调（设置页据此刷新分组入口） */
+    private onDone?: () => void,
   ) {
     super(app);
     this.mode = mode;
@@ -212,7 +214,10 @@ export class FormatsTransferModal extends Modal {
             .onClick(() => {
               const res = this.plugin.formatsManager.importJson(ta.value);
               new Notice(res.message);
-              if (res.ok) this.close();
+              if (res.ok) {
+                this.close();
+                this.onDone?.();
+              }
             });
         }
         return btn;

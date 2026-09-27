@@ -423,9 +423,7 @@ export class TextInserter {
     if (!el || typeof el.closest !== 'function') return null;
     return (
       el.closest<HTMLElement>('.cm-editor') ||
-      (typeof el.querySelector === 'function'
-        ? el.querySelector<HTMLElement>('.cm-editor')
-        : null) ||
+      el.querySelector<HTMLElement>('.cm-editor') ||
       null
     );
   }

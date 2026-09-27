@@ -22,6 +22,8 @@ export class GlobalInputListener {
   private _documents = new Set<Document>();
   private _syncTimer: number | null = null;
   private lastTriggerTime = 0;
+  /** 补全确认后的抑制期结束时间戳：期间由插入操作引发的 editor-change / input 不重新触发弹窗 */
+  private _confirmSuppressUntil = 0;
   private isActive = false;
 
   constructor(private plugin: SimpleScriptCompleter) {
@@ -170,6 +172,12 @@ export class GlobalInputListener {
 
   // ---- 统一处理逻辑 ----
   private _processText(textBefore: string, el: HTMLElement, cmEditor: Editor | null): void {
+    // 补全确认后的抑制期：成功插入会触发 editor-change / input，若此时仍按原文本
+    // 重新计算会立刻弹出同样的建议（自触发）。窗口期内直接忽略并收起可能残留的弹窗。
+    if (Date.now() < this._confirmSuppressUntil) {
+      if (this.popup.isVisible()) this.popup.hide();
+      return;
+    }
     if (!textBefore) {
       // 光标前已无内容（如删空/换行），收起仍在显示的弹窗，避免悬空
       if (this.popup.isVisible()) this.popup.hide();
@@ -298,6 +306,7 @@ export class GlobalInputListener {
   private _onFormatSelectDOM(el: HTMLElement, suggestion: Suggestion, prefixChar: string): void {
     const len = this._calcDeleteLength(TextInserter.getTextBeforeCursor(el), prefixChar);
     this.plugin.insertFormatItem(null, el, suggestion, len);
+    this._confirmSuppressUntil = Date.now() + 300;
   }
 
   /**
@@ -322,6 +331,7 @@ export class GlobalInputListener {
     if (!insert) return;
     TextInserter.replaceBeforeCursor(el, insert, len);
     this.plugin.recordUsage(suggestion);
+    this._confirmSuppressUntil = Date.now() + 300;
   }
 
   // ---- 选择回调：CM 编辑器的 Obsidian Editor API ----
@@ -330,6 +340,7 @@ export class GlobalInputListener {
     const textBefore = editor.getLine(cursor.line).substring(0, cursor.ch);
     const len = this._calcDeleteLength(textBefore, prefixChar);
     this.plugin.insertFormatItem(editor, null, suggestion, len);
+    this._confirmSuppressUntil = Date.now() + 300;
   }
 
   private _onSmartSelectCM(editor: Editor, suggestion: Suggestion, prefixChar: string): void {
@@ -355,6 +366,7 @@ export class GlobalInputListener {
       ch: rel.line === 0 ? base.ch + rel.ch : rel.ch,
     });
     this.plugin.recordUsage(suggestion);
+    this._confirmSuppressUntil = Date.now() + 300;
   }
 
   detectLineContext(line: string): string {

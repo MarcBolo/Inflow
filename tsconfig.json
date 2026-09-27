@@ -1,6 +1,12 @@
 {
   "compilerOptions": {
     "baseUrl": ".",
+    "paths": {
+      // 审查/CI 环境不安装 node_modules，import 'obsidian' 解析失败会让全部 Obsidian API 退化成 any，
+      // 进而刷出上千条 no-unsafe-* 误报。故把 obsidian 的类型声明随仓库分发（types/obsidian.d.ts）。
+      // 本地优先用 node_modules 里的真类型；升级 obsidian 后执行 npm run sync-obsidian-types 同步分发副本。
+      "obsidian": ["node_modules/obsidian/obsidian.d.ts", "types/obsidian.d.ts"]
+    },
     "inlineSourceMap": true,
     "inlineSources": true,
     "module": "ESNext",

@@ -59,6 +59,17 @@ export class FloatingSuggestPopup {
     void plugin;
   }
 
+  /**
+   * 设置「使用 Enter 提交词条」是否开启。
+   * 关闭时，弹窗中的 Enter 不再确认高亮候选，而是原样放行给编辑器做换行
+   * （与空查询常驻弹窗未导航时的行为一致）。鼠标点击始终可确认，不受此开关影响。
+   * 默认开启（与历史行为一致）。读插件实时设置，用户无需重开弹窗即可生效。
+   */
+  private _enterSubmitEnabled(): boolean {
+    const p = this.plugin as { settings?: { enableEnterSubmit?: boolean } };
+    return (p?.settings?.enableEnterSubmit ?? true) === true;
+  }
+
   create(doc: Document = document): void {
     if (this.container) return;
     this.container = doc.body.createDiv();
@@ -384,6 +395,29 @@ export class FloatingSuggestPopup {
     }
   }
 
+  /**
+   * 用空格或 Enter 尝试确认当前高亮项。
+   * 有查询词（prefixChar 非空）或触发符（triggerChar 非空，如 @）时直接确认；
+   * 仅当「空查询常驻弹窗」（minimal-trigger 自动弹出、尚未输入文字）且用户还没用
+   * 方向键/悬停导航时，放行按键（不拦截，交给编辑器做换行/分词）。
+   * 返回 true 表示已确认并拦截事件；false 表示已放行（弹窗收起、未确认）。
+   */
+  private _confirmSelection(e: KeyboardEvent): boolean {
+    if (
+      !this.armed &&
+      this.prefixChar.length === 0 &&
+      this.triggerChar === ''
+    ) {
+      // 空查询常驻弹窗：不拦截空格/回车，正常换行或分词
+      this.hide();
+      return false;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    this.selectItem(this.selectedIndex);
+    return true;
+  }
+
   positionNearCursor(): void {
     if (!this.container) return;
     const pos = this._measureCursorPos();
@@ -492,7 +526,7 @@ export class FloatingSuggestPopup {
     cmEl: HTMLElement,
     preferNear: { left: number; bottom: number } | null,
   ): { left: number; top: number; bottom: number } | null {
-    if (!cmEl || typeof cmEl.querySelectorAll !== 'function') return null;
+    if (!cmEl) return null;
 
     const focusEl = this._activeEl();
     const focusInWidget = !!focusEl?.closest?.('.cm-table-widget');
@@ -687,21 +721,22 @@ export class FloatingSuggestPopup {
           break;
         case 'Enter':
           if (!this.isEventFromTarget(e)) return;
-          // 智能区分：有查询词（prefixChar 非空）或触发符（triggerChar 非空，如 @）
-          // 时，Enter 直接确认当前高亮项；仅当「空查询常驻弹窗」（minimal-trigger
-          // 自动弹出、尚未输入文字）且用户还没用方向键/悬停导航时，才把 Enter 原样
-          // 交给编辑器做换行（收起弹窗、不拦截；随后的 editor-change 会按新上下文重算）。
-          if (
-            !this.armed &&
-            this.prefixChar.length === 0 &&
-            this.triggerChar === ''
-          ) {
+          // Enter 是否确认受「使用 Enter 提交词条」开关控制：
+          // 关闭时一律放行给编辑器（换行）；开启时走与空格一致的确认逻辑。
+          if (!this._enterSubmitEnabled()) {
             this.hide();
             return;
           }
-          e.preventDefault();
-          e.stopPropagation();
-          this.selectItem(this.selectedIndex);
+          this._confirmSelection(e);
+          break;
+        case ' ':
+        case 'Spacebar':
+          if (!this.isEventFromTarget(e)) return;
+          // 空格确认补全：与输入法空格选词一致的使用习惯。
+          // IME 组字期间的空格已在上面被 isComposing 放行，不会误拦截。
+          // 不受 enableEnterSubmit 开关影响——空格是独立、默认的确认键。
+          // 仅「空查询常驻弹窗」且未导航过时放行空格（正常换行/分词），不确认。
+          this._confirmSelection(e);
           break;
         // Tab 不参与确认：无对应 case，一律放行给编辑器做缩进/焦点切换
         case 'Escape':

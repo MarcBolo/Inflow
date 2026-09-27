@@ -45,10 +45,9 @@ export class LibraryManager {
       const files: TFile[] = [];
       this.collectMdFiles(folder, files);
 
-      let successCount = 0;
       for (const file of files) {
         if (file instanceof TFile && file.extension === 'md') {
-          if (await this.loadLibraryFile(file)) successCount++;
+          await this.loadLibraryFile(file);
         }
       }
     } catch (error) {

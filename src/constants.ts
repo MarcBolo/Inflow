@@ -301,6 +301,9 @@ export const DEFAULT_SETTINGS: BLFormatCompleterSettings = {
   enableSmartCompletion: true,
   enableContextAware: true,
   enableMinimalTrigger: true,
+  // 默认关闭「Enter 提交」：空格键为默认确认键（与输入法空格选词一致），
+  // Enter 专用于换行，彻底避免两者冲突。老用户 data.json 已有值不受影响。
+  enableEnterSubmit: false,
   enableInSearchPrompt: false,
   enablePinyin: true,
   smartMinLength: 1,

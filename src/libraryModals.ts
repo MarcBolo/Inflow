@@ -23,7 +23,7 @@ export class LibraryCreationModal extends Modal {
       cls: 'blfc-lib-name-input',
     });
 
-    setTimeout(() => inputEl.focus(), 100);
+    window.setTimeout(() => inputEl.focus(), 100);
 
     const buttonContainer = contentEl.createDiv({ cls: 'blfc-modal-btn-container' });
 

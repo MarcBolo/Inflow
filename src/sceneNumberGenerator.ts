@@ -86,7 +86,6 @@ export class SceneNumberGenerator {
   /** 获取当前集内已存在的最大场景号 */
   getMaxSceneNumberInEpisode(editor: EditorLike, episode: number): number {
     let maxSceneNumber = 0;
-    const lineCount = editor.lineCount();
 
     const range = this.findEpisodeRange(editor, episode);
     if (!range) return 0;

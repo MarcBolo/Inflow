@@ -1,12 +1,11 @@
 /**
  * 插件设置面板
  */
-import { Modal, Notice, PluginSettingTab, Setting, setIcon } from 'obsidian';
-import type { App } from 'obsidian';
-import { LibraryEdgeStrips } from './quickPanel';
+import { Modal, Notice, PluginSettingTab, Setting, SettingPage, setIcon } from 'obsidian';
+import type { App, ExtraButtonComponent, SettingDefinition, SettingDefinitionGroup, SettingDefinitionItem, SettingGroupItem } from 'obsidian';
 import { FormatItemEditModal, FormatsTransferModal } from './formatModals';
 import type { SimpleScriptCompleter } from './main';
-import type { FormatItem, ItemFormat } from './types';
+import type { BLFormatCompleterSettings, FormatItem, ItemFormat } from './types';
 import { MAX_QUICK_COMMANDS } from './formatsManager';
 import { DEFAULT_LIBRARY_PALETTE } from './constants';
 
@@ -153,7 +152,7 @@ class ConfirmModal extends Modal {
       .addButton((btn) =>
         btn
           .setButtonText('确认删除')
-          .setWarning()
+          .setDestructive()
           .onClick(() => {
             this.onConfirm();
             this.close();
@@ -221,432 +220,78 @@ class ItemFormatsTransferModal extends Modal {
   }
 }
 
-export class SimpleScriptSettingTab extends PluginSettingTab {
+/** 设置页里的一个二级页：分组配置 / 词库列表 / 词条格式 / 词库参考 */
+type SubpageMode =
+  | { kind: 'group'; groupId: string }
+  | { kind: 'libraryList' }
+  | { kind: 'itemFormats' }
+  | { kind: 'reference' };
+
+/**
+ * 二级页正文（1.13+ 声明式设置 API 的 page 载荷）。
+ * 四种二级页共用这一个类，按 mode 渲染对应页面；渲染代码沿用改造前的实现，
+ * 只是渲染目标从 tab 的 containerEl 换成 SettingPage 的 containerEl（页内逻辑不变）。
+ * 注：1.13 没有公开的「代码跳转子页面」API，页面之间的切换全部交给框架的入口行。
+ */
+class InFlowSubpage extends SettingPage {
   private libraryTableContainer!: HTMLElement;
-  /** 模板库设置区块容器（内容全部动态重建） */
-  private formatsArea: HTMLElement | null = null;
 
-  constructor(app: App, private plugin: SimpleScriptCompleter) {
-    super(app, plugin);
+  constructor(
+    private app: App,
+    private plugin: SimpleScriptCompleter,
+    private mode: SubpageMode,
+    /** 数据变化后刷新插件设置页的定义（分组增删改 / 词条格式增删 / 词库切换等） */
+    private onDataChanged: () => void,
+  ) {
+    super();
+    this.title = InFlowSubpage.titleOf(plugin, mode);
   }
 
-  /** 二级页面导航状态：null=主设置页；groupId=正在查看的分组页 */
-  private activeGroupId: string | null = null;
-  /** 二级页面导航状态：true=正在查看「词库列表」页 */
-  private showLibraryList = false;
-  /** 二级页面导航状态：true=正在查看「词库参考」页（词库格式说明） */
-  private showLibraryReference = false;
-  /** 二级页面导航状态：true=正在查看「词条格式」页（词条行语法配置） */
-  private showItemFormats = false;
-
-  display(): void {
-    const { containerEl } = this;
-    containerEl.empty();
-
-    // 添加插件专属命名空间类
-    containerEl.addClass('blfc-plugin');
-
-    // 二级页面（分组设置）会话保持：切走再回来仍在原分组页
-    if (this.activeGroupId) {
-      this.renderGroupSubpage(this.activeGroupId);
-      return;
+  /** 框架页面标题栏文案 */
+  private static titleOf(plugin: SimpleScriptCompleter, mode: SubpageMode): string {
+    switch (mode.kind) {
+      case 'group':
+        return plugin.formatsManager.groupById(mode.groupId)?.name ?? '分组设置';
+      case 'libraryList':
+        return '词库列表';
+      case 'itemFormats':
+        return '词条格式';
+      case 'reference':
+        return '词库格式说明';
     }
-    // 二级页面（词库列表）会话保持
-    if (this.showLibraryList) {
-      this.renderLibraryListSubpage();
-      return;
+  }
+
+  override display(): void {
+    switch (this.mode.kind) {
+      case 'group':
+        this.renderGroupSubpage(this.mode.groupId);
+        return;
+      case 'libraryList':
+        this.renderLibraryListSubpage();
+        return;
+      case 'itemFormats':
+        this.renderItemFormatsSubpage();
+        return;
+      case 'reference':
+        this.renderReferenceSubpage();
+        return;
     }
-    // 二级页面（词库参考：词库格式说明）会话保持
-    if (this.showLibraryReference) {
-      this.renderReferenceSubpage();
-      return;
-    }
-    // 二级页面（词条格式：词条行语法配置）会话保持
-    if (this.showItemFormats) {
-      this.renderItemFormatsSubpage();
-      return;
-    }
-
-    // ========== 第一部分：基本设置 ==========
-    new Setting(containerEl).setName('基本设置').setHeading();
-
-    new Setting(containerEl)
-      .setName('启用插件')
-      .setDesc('启用或禁用格式补全功能')
-      .addToggle((toggle) =>
-        toggle.setValue(this.plugin.settings.enabled).onChange(async (value) => {
-          this.plugin.settings.enabled = value;
-          await this.plugin.saveSettings();
-        }),
-      );
-
-    new Setting(containerEl)
-      .setName('自动对话建议')
-      .setDesc('在角色名后自动建议插入对话格式')
-      .addToggle((toggle) =>
-        toggle.setValue(this.plugin.settings.autoDialogue).onChange(async (value) => {
-          this.plugin.settings.autoDialogue = value;
-          await this.plugin.saveSettings();
-        }),
-      );
-
-    // ========== 第二部分：智能补全设置 ==========
-    new Setting(containerEl).setName('智能补全').setHeading();
-
-    new Setting(containerEl)
-      .setName('启用智能补全')
-      .setDesc('启用智能补全功能')
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.enableSmartCompletion)
-          .onChange(async (value) => {
-            this.plugin.settings.enableSmartCompletion = value;
-            await this.plugin.saveSettings();
-          }),
-      );
-
-    new Setting(containerEl)
-      .setName('启用上下文感知')
-      .setDesc('根据光标位置自动提供相关补全建议')
-      .addToggle((toggle) =>
-        toggle.setValue(this.plugin.settings.enableContextAware).onChange(async (value) => {
-          this.plugin.settings.enableContextAware = value;
-          await this.plugin.saveSettings();
-        }),
-      );
-
-    new Setting(containerEl)
-      .setName('启用最小触发')
-      .setDesc('在特定格式位置（如场景标题、角色名）即使没有输入也显示建议')
-      .addToggle((toggle) =>
-        toggle.setValue(this.plugin.settings.enableMinimalTrigger).onChange(async (value) => {
-          this.plugin.settings.enableMinimalTrigger = value;
-          await this.plugin.saveSettings();
-        }),
-      );
-
-    new Setting(containerEl)
-      .setName('搜索类弹窗中也补全')
-      .setDesc(
-        '命令面板 / 快速切换 / 第三方 SuggestModal 等「搜索类」弹窗内也触发补全。'
-          + '第三方插件把普通输入框做成 SuggestModal 时可开启；默认关闭以免命令名被剧本候选刷屏',
-      )
-      .addToggle((toggle) =>
-        toggle.setValue(this.plugin.settings.enableInSearchPrompt).onChange(async (value) => {
-          this.plugin.settings.enableInSearchPrompt = value;
-          await this.plugin.saveSettings();
-        }),
-      );
-
-    new Setting(containerEl)
-      .setName('启用拼音匹配')
-      .setDesc('启用拼音首字母匹配功能')
-      .addToggle((toggle) =>
-        toggle.setValue(this.plugin.settings.enablePinyin).onChange(async (value) => {
-          this.plugin.settings.enablePinyin = value;
-          await this.plugin.saveSettings();
-        }),
-      );
-
-    new Setting(containerEl)
-      .setName('智能补全最小触发长度')
-      .setDesc('输入多少个字符后开始智能补全建议')
-      .addSlider((slider) =>
-        slider
-          .setLimits(1, 5, 1)
-          .setValue(this.plugin.settings.smartMinLength)
-          .setDynamicTooltip()
-          .onChange(async (value) => {
-            this.plugin.settings.smartMinLength = value;
-            await this.plugin.saveSettings();
-          }),
-      );
-
-    new Setting(containerEl)
-      .setName('智能补全最大建议数')
-      .setDesc('智能补全最多显示多少个建议')
-      .addSlider((slider) =>
-        slider
-          .setLimits(5, 20, 1)
-          .setValue(this.plugin.settings.smartMaxSuggestions)
-          .setDynamicTooltip()
-          .onChange(async (value) => {
-            this.plugin.settings.smartMaxSuggestions = value;
-            await this.plugin.saveSettings();
-          }),
-      );
-
-    // ========== 组合建议设置 ==========
-    new Setting(containerEl).setName('组合建议').setHeading();
-
-    new Setting(containerEl)
-      .setName('启用场景/对话组合建议')
-      .setDesc('生成「场景×时间」「角色×台词」的组合词条；词库较大时组合项可能淹没真实词条，可关闭')
-      .addToggle((toggle) =>
-        toggle.setValue(this.plugin.settings.enableCombos).onChange(async (value) => {
-          this.plugin.settings.enableCombos = value;
-          await this.plugin.saveSettings();
-        }),
-      );
-
-    new Setting(containerEl)
-      .setName('组合建议最大条数')
-      .setDesc('组合词条的上限，超出部分自动截断（仅启用组合建议时生效）')
-      .addSlider((slider) =>
-        slider
-          .setLimits(20, 200, 10)
-          .setValue(this.plugin.settings.comboMaxItems)
-          .setDynamicTooltip()
-          .onChange(async (value) => {
-            this.plugin.settings.comboMaxItems = value;
-            await this.plugin.saveSettings();
-          }),
-      );
-
-    // ========== 第三部分：快捷悬浮面板设置 ==========
-    new Setting(containerEl).setName('快捷悬浮面板').setHeading();
-
-    new Setting(containerEl)
-      .setName('启用快捷悬浮面板')
-      .setDesc('在编辑器界面显示词库快捷操作面板')
-      .addToggle((toggle) =>
-        toggle.setValue(this.plugin.settings.enableQuickPanel).onChange(async (value) => {
-          this.plugin.settings.enableQuickPanel = value;
-          await this.plugin.saveSettings();
-
-          // 立即创建或销毁面板
-          if (value && !this.plugin.quickPanel) {
-            this.plugin.quickPanel = new LibraryEdgeStrips(this.plugin);
-            this.plugin.quickPanel.create();
-          } else if (!value && this.plugin.quickPanel) {
-            this.plugin.quickPanel.destroy();
-            this.plugin.quickPanel = null;
-          }
-        }),
-      );
-
-    new Setting(containerEl)
-      .setName('词库更新自动刷新')
-      .setDesc('修改词库文件后自动刷新当前词库（无需手动操作）')
-      .addToggle((toggle) =>
-        toggle.setValue(this.plugin.settings.enableAutoRefresh).onChange(async (value) => {
-          this.plugin.settings.enableAutoRefresh = value;
-          await this.plugin.saveSettings();
-        }),
-      );
-
-    new Setting(containerEl)
-      .setName('自动刷新后显示通知')
-      .setDesc('词库自动刷新后显示简短通知')
-      .addToggle((toggle) =>
-        toggle.setValue(this.plugin.settings.showAutoRefreshNotice).onChange(async (value) => {
-          this.plugin.settings.showAutoRefreshNotice = value;
-          await this.plugin.saveSettings();
-        }),
-      );
-
-    // ========== 格式模板（数据驱动，formats.json） ==========
-    this.formatsArea = containerEl.createDiv({ cls: 'blfc-fmt-area' });
-    this.renderFormatsArea();
-
-    // ========== 第四部分：词库管理（配置主区；词库列表在二级页） ==========
-    this.renderLibraryOverview();
-
-    // ========== 第四部分之二：词条格式（入口卡片；语法配置在二级页） ==========
-    this.renderItemFormatsOverview();
-
-    // ========== 第五部分：词库参考（入口卡片；词库格式说明在二级页） ==========
-    this.renderReferenceOverview();
-
-    // ========== 第六部分：调试 ==========
-    new Setting(containerEl).setName('调试').setHeading();
-
-    new Setting(containerEl)
-      .setName('测试功能')
-      .setDesc('测试当前词库加载情况')
-      .addButton((button) =>
-        button.setButtonText('测试').onClick(async () => {
-          const libraryDir = this.plugin.libraryManager.getLibraryDirectory();
-          const libraries = this.plugin.libraryManager.getAvailableLibraries();
-          const activeLibrary = this.plugin.libraryManager.activeLibrary;
-
-          let message = '';
-          if (libraryDir) {
-            message += `词库文件夹: ${libraryDir}\n`;
-            message += `找到 ${libraries.length} 个词库\n`;
-
-            if (activeLibrary) {
-              const info = this.plugin.libraryManager.getLibraryInfo(activeLibrary);
-              message += `当前词库: ${activeLibrary}\n`;
-              if (info) {
-                message += `总词条数: ${info.itemCount}个\n`;
-                if (info.metadata && Object.keys(info.metadata).length > 0) {
-                  message += `元数据: ${JSON.stringify(info.metadata)}\n`;
-                }
-              }
-            } else {
-              message += '当前未使用词库';
-            }
-          } else {
-            message = '请先设置词库文件夹';
-          }
-
-          new Notice(message);
-        }),
-      );
-  }
-
-  // ========== 模板库设置（主界面概览 + 分组管理进入二级） ==========
-
-  /** 重建主设置区（改动后调用；分组内部管理在 GroupManageModal 二级界面） */
-  private renderFormatsArea(): void {
-    if (!this.formatsArea) return;
-    const area = this.formatsArea;
-    area.empty();
-    const fm = this.plugin.formatsManager;
-    const file = fm.file;
-
-    // —— 标题栏：格式模板 + 新增 ——
-    const header = area.createDiv({ cls: 'blfc-fmt-header' });
-    header.createSpan({ text: '格式模板', cls: 'blfc-fmt-title' });
-    const addBtn = header.createEl('button', {
-      text: '新增',
-      cls: 'blfc-fmt-add-btn',
-    });
-    addBtn.addEventListener('click', () => {
-      new SimpleTextModal(
-        this.app,
-        '新建分组',
-        '分组名，如：周报模板',
-        '',
-        (name) => {
-          const g = { id: fm.newCustomId('grp'), name };
-          void fm.mutate((d) => {
-            d.groups.push(g);
-            return null;
-          });
-          this.renderFormatsArea();
-        },
-      ).open();
-    });
-
-    // —— 入口：默认触发符 + 常驻命令 ——
-    const entryRow = area.createDiv({ cls: 'blfc-fmt-entry' });
-    entryRow.createEl('label', { text: '默认触发符', cls: 'blfc-fmt-entry-label' });
-    const chInput = entryRow.createEl('input', {
-      type: 'text',
-      value: fm.triggerChar,
-      placeholder: '@',
-      cls: 'blfc-fmt-trigger-input',
-      title: '未设专属触发符的分组由它弹出；支持多字符（如 ##）',
-    });
-    chInput.addEventListener('keydown', (e) => {
-      e.stopPropagation();
-      if (e.key === 'Enter') this.commitTriggerChar(chInput.value);
-    });
-    chInput.addEventListener('blur', () => this.commitTriggerChar(chInput.value));
-    entryRow.createSpan({
-      text: '输入后弹出模板菜单；可为某分组单独设专属触发符（在其管理界面里）。',
-      cls: 'blfc-fmt-hint',
-    });
-
-    // —— 分组概览（每行一行；管理在二级弹窗） ——
-    if (file.groups.length === 0) {
-      area.createDiv({ text: '暂无分组，点右上角「新增」开始。', cls: 'blfc-fmt-empty' });
-    } else {
-      file.groups.forEach((g) => this.renderGroupRow(area, g.id));
-    }
-
-    // —— 高级（折叠） ——
-    const adv = area.createEl('details', { cls: 'blfc-fmt-advanced' });
-    adv.createEl('summary', { text: '高级：导出 / 导入' });
-    const advRow = adv.createDiv({ cls: 'blfc-fmt-tools' });
-    const mkAdv = (text: string, onClick: () => void): HTMLButtonElement => {
-      const b = advRow.createEl('button', { text, cls: 'blfc-fmt-btn' });
-      b.addEventListener('click', onClick);
-      return b;
-    };
-    mkAdv('导出配置…', () => new FormatsTransferModal(this.app, this.plugin, 'export').open());
-    mkAdv('导入配置…', () => new FormatsTransferModal(this.app, this.plugin, 'import').open());
-  }
-
-  /** 分组一行概览：名称 / 条数+触发命令 / 进入箭头（仅箭头可点击） */
-  private renderGroupRow(area: HTMLElement, groupId: string): void {
-    const fm = this.plugin.formatsManager;
-    const group = fm.groupById(groupId);
-    if (!group) return;
-    const count = fm.file.items.filter((i) => i.group === groupId).length;
-    const row = area.createDiv({ cls: 'blfc-fmt-group-row' });
-    const main = row.createDiv({ cls: 'blfc-fmt-group-row-main' });
-    main.createSpan({ text: group.name, cls: 'blfc-fmt-group-row-name' });
-    main.createSpan({
-      text: `${count}条 · 触发 ${group.trigger ?? fm.triggerChar}`,
-      cls: 'blfc-fmt-group-row-meta',
-    });
-    const arrowBtn = row.createEl('button', {
-      text: '›',
-      title: '进入分组设置',
-      cls: 'blfc-fmt-arrow',
-    });
-    arrowBtn.addEventListener('click', () => this.goToGroup(groupId));
-  }
-
-  // ========== 分组二级页面（设置页内页面导航，非弹窗） ==========
-
-  /** 进入分组设置页 */
-  goToGroup(groupId: string): void {
-    this.activeGroupId = groupId;
-    this.display();
-  }
-
-  /** 返回主设置页 */
-  backToOverview(): void {
-    this.activeGroupId = null;
-    this.showLibraryList = false;
-    this.showLibraryReference = false;
-    this.showItemFormats = false;
-    this.display();
-  }
-
-  /** 进入词库列表二级页 */
-  goToLibraryList(): void {
-    this.showLibraryList = true;
-    this.display();
-  }
-
-  /** 进入「词库参考」二级页（词库格式说明） */
-  goToReference(): void {
-    this.showLibraryReference = true;
-    this.display();
-  }
-
-  /** 进入「词条格式」二级页（词条行语法配置） */
-  goToItemFormats(): void {
-    this.showItemFormats = true;
-    this.display();
   }
 
   /** 渲染分组设置二级页面（替换整页内容） */
   private renderGroupSubpage(groupId: string): void {
     const fm = this.plugin.formatsManager;
     const group = fm.groupById(groupId);
-    if (!group) {
-      this.backToOverview();
-      return;
-    }
     const { containerEl } = this;
     containerEl.empty();
     containerEl.addClass('blfc-plugin');
-
-    // 顶部返回栏
-    const nav = containerEl.createDiv({ cls: 'blfc-fmt-subnav' });
-    const backBtn = nav.createEl('button', { text: '返回', cls: 'blfc-fmt-btn' });
-    backBtn.addEventListener('click', () => this.backToOverview());
-    nav.createSpan({ text: '格式模板', cls: 'blfc-fmt-subnav-crumb' });
-
-    const groupTitle = new Setting(containerEl)
-      .setName(`${group.name} · 分组设置`)
-      .setHeading();
+    if (!group) {
+      containerEl.createDiv({
+        text: '该分组已不存在（可能刚被删除）。点上方返回回到设置页。',
+        cls: 'blfc-fmt-empty',
+      });
+      return;
+    }
 
     // —— 专属触发符 ——
     const triggerRow = containerEl.createDiv({ cls: 'blfc-fmt-entry' });
@@ -708,7 +353,8 @@ export class SimpleScriptSettingTab extends PluginSettingTab {
           if (g) g.name = name;
           return null;
         });
-        groupTitle.setName(`${name.trim()} · 分组设置`);
+        this.title = `${name.trim()} · 分组设置`;
+        this.onDataChanged();
       }).open();
     });
 
@@ -917,7 +563,15 @@ export class SimpleScriptSettingTab extends PluginSettingTab {
             });
             return null;
           });
-          this.backToOverview();
+          // 1.13 无公开的「代码跳页」API：就地提示已删除，并刷新设置页上的分组入口
+          this.onDataChanged();
+          const { containerEl } = this;
+          containerEl.empty();
+          containerEl.addClass('blfc-plugin');
+          containerEl.createDiv({
+            text: `分组「${group.name}」已删除。点上方返回回到设置页。`,
+            cls: 'blfc-fmt-empty',
+          });
         },
       ).open();
     });
@@ -931,54 +585,6 @@ export class SimpleScriptSettingTab extends PluginSettingTab {
     return undefined;
   }
 
-  /** 修改全局默认触发符：与所有分组专属触发符一起做前缀冲突校验 */
-  private commitTriggerChar(value: string): void {
-    const ch = value.trim();
-    if (!ch) {
-      new Notice('默认触发符不能为空');
-      this.renderFormatsArea();
-      return;
-    }
-    const others = this.plugin.formatsManager.currentTriggerValues().filter(
-      (c) => c !== this.plugin.formatsManager.triggerChar,
-    );
-    const check = this.plugin.formatsManager.validateTriggerSet([...others, ch]);
-    if (!check.ok) {
-      new Notice(check.message);
-      this.renderFormatsArea();
-      return;
-    }
-    void this.plugin.formatsManager.mutate((d) => {
-      d.triggerChar = ch;
-      return null;
-    });
-    this.renderFormatsArea();
-  }
-
-  // ========== 词库参考：主区入口卡片 + 二级页（词库格式说明） ==========
-
-  /** 主区渲染：词库参考卡片——标题栏（词库格式说明入口）+ 一句话描述 */
-  private renderReferenceOverview(): void {
-    const { containerEl } = this;
-    const area = containerEl.createDiv({ cls: 'blfc-lib-area' });
-
-    // —— 标题栏：词库参考 + 进入二级页入口 ——
-    const header = area.createDiv({ cls: 'blfc-lib-header' });
-    header.createSpan({ text: '词库参考', cls: 'blfc-lib-title' });
-    const viewBtn = header.createEl('button', {
-      text: '查看 ›',
-      title: '词库文件的格式说明',
-      cls: 'blfc-lib-entry-btn',
-    });
-    viewBtn.addEventListener('click', () => this.goToReference());
-
-    // —— 一句话描述（点标题栏右侧入口进入完整说明） ——
-    const descRow = area.createDiv({ cls: 'blfc-fmt-entry' });
-    descRow.createSpan({
-      text: '词库文件（.md）的书写格式：章节标题、词条分隔（显示|插入|描述）、列表标记与 YAML 元数据。',
-      cls: 'blfc-fmt-hint',
-    });
-  }
 
   /** 渲染「词库参考」二级页面：仅保留词库 .md 文件格式说明（替换整页内容） */
   private renderReferenceSubpage(): void {
@@ -986,14 +592,6 @@ export class SimpleScriptSettingTab extends PluginSettingTab {
     containerEl.empty();
     containerEl.addClass('blfc-plugin');
 
-    // 顶部返回栏
-    const nav = containerEl.createDiv({ cls: 'blfc-fmt-subnav' });
-    const backBtn = nav.createEl('button', { text: '返回', cls: 'blfc-fmt-btn' });
-    backBtn.addEventListener('click', () => this.backToOverview());
-    nav.createSpan({ text: '词库参考', cls: 'blfc-fmt-subnav-crumb' });
-    nav.createSpan({ text: '› 词库格式说明', cls: 'blfc-fmt-subnav-crumb' });
-
-    new Setting(containerEl).setName('词库格式说明').setHeading();
     containerEl.createDiv({
       text: '词库是一个普通 Markdown 文件：一级标题为词库名，二级标题为类别（可自由命名），类别下逐行写词条。',
       cls: 'blfc-fmt-hint',
@@ -1048,45 +646,6 @@ sad|sad|悲伤的`,
     addRich(['支持列表标记（', { tag: 'code', text: '-' }, ' 或 ', { tag: 'code', text: '*' }, '）开头']);
     addRich(['支持 YAML 元数据（文件开头用 ', { tag: 'code', text: '---' }, ' 包裹）']);
     addRich(['类别（', { tag: 'code', text: '##' }, '）可自由命名；', { tag: 'code', text: '###' }, ' 三级标题归入最近一个二级类别，不另起类别']);
-
-    const toItemFormatsBtn = doc.createEl('button', {
-      text: '去配置词条格式 ›',
-      title: '打开词条格式页，自定义一行词条如何切分',
-      cls: 'blfc-lib-entry-btn',
-    });
-    toItemFormatsBtn.addEventListener('click', () => this.goToItemFormats());
-  }
-
-  // ========== 词条格式：主区（入口卡片）+ 二级页（模板配置） ==========
-
-  /** 主区渲染：词条格式卡片——标题栏（二级页入口）+ 当前格式概览 */
-  private renderItemFormatsOverview(): void {
-    const { containerEl } = this;
-    const area = containerEl.createDiv({ cls: 'blfc-lib-area' });
-
-    const header = area.createDiv({ cls: 'blfc-lib-header' });
-    header.createSpan({ text: '词条格式', cls: 'blfc-lib-title' });
-    const entryBtn = header.createEl('button', {
-      text: '配置词条格式 ›',
-      title: '定义一行词条如何切分为显示 / 插入 / 描述',
-      cls: 'blfc-lib-entry-btn',
-    });
-    entryBtn.addEventListener('click', () => this.goToItemFormats());
-
-    const formats = this.plugin.itemFormatsManager.formats;
-    if (formats.length === 0) {
-      area.createDiv({
-        cls: 'blfc-fmt-hint blfc-ifmt-warn',
-        text: '当前没有任何词条格式 —— 词库将解析不出任何词条。',
-      });
-      return;
-    }
-    area.createDiv({
-      cls: 'blfc-fmt-hint',
-      text: `共 ${formats.length} 条，按顺序尝试、第一条匹配的生效：${formats
-        .map((f) => f.template)
-        .join('　/　')}`,
-    });
   }
 
   /** 词条格式变更后：重载词库（按新模板重新解析）并重建补全索引 */
@@ -1095,6 +654,7 @@ sad|sad|悲伤的`,
     await this.plugin.buildSmartCompletionIndex();
     this.plugin.updateStatusBar();
     if (this.plugin.quickPanel) this.plugin.quickPanel.refresh();
+    this.onDataChanged();
   }
 
   /** 交换格式顺序（决定解析优先级） */
@@ -1114,13 +674,6 @@ sad|sad|悲伤的`,
     containerEl.empty();
     containerEl.addClass('blfc-plugin');
 
-    const nav = containerEl.createDiv({ cls: 'blfc-fmt-subnav' });
-    const backBtn = nav.createEl('button', { text: '返回', cls: 'blfc-fmt-btn' });
-    backBtn.addEventListener('click', () => this.backToOverview());
-    nav.createSpan({ text: '词条格式', cls: 'blfc-fmt-subnav-crumb' });
-    nav.createSpan({ text: '› 词条行语法', cls: 'blfc-fmt-subnav-crumb' });
-
-    new Setting(containerEl).setName('词条格式').setHeading();
     containerEl.createDiv({
       cls: 'blfc-fmt-hint',
       text: '一行词条怎么切分，完全由下面的模板决定：{显示} {插入} {描述} 是字段占位符，模板里的其他字符自动成为分隔符。解析时自上而下尝试，第一条匹配的生效 —— 精确的模板放前面，宽松的（如只有 {显示}）垫底。',
@@ -1331,67 +884,12 @@ sad|sad|悲伤的`,
     previewLine();
   }
 
-  // ========== 词库管理：主区（配置卡片）+ 二级页（词库列表） ==========
-
-  /** 主区渲染：词库管理卡片——标题栏（词库列表入口）+ 词库文件夹路径设置（含刷新按钮） */
-  private renderLibraryOverview(): void {
-    const { containerEl } = this;
-    const area = containerEl.createDiv({ cls: 'blfc-lib-area' });
-
-    // —— 标题栏：词库管理 + 词库列表入口（二级页） ——
-    const header = area.createDiv({ cls: 'blfc-lib-header' });
-    header.createSpan({ text: '词库管理', cls: 'blfc-lib-title' });
-    const listBtn = header.createEl('button', {
-      text: '词库列表 ›',
-      title: '查看全部词库并切换当前词库',
-      cls: 'blfc-lib-entry-btn',
-    });
-    listBtn.addEventListener('click', () => this.goToLibraryList());
-
-    // —— 词库文件夹：路径输入 + 刷新按钮 ——
-    const folderItem = area.createDiv({ cls: 'blfc-lib-folder-line' });
-    folderItem.createEl('label', { text: '词库文件夹', cls: 'blfc-lib-config-label' });
-    const folderInput = folderItem.createEl('input', {
-      type: 'text',
-      placeholder: '例如: 我的剧本库 或 /我的剧本/词库',
-      cls: 'blfc-lib-folder-input',
-    });
-    folderInput.value = this.plugin.settings.libraryFolder || '';
-    folderInput.addEventListener('change', () => {
-      this.plugin.settings.libraryFolder = folderInput.value.trim();
-      void (async () => {
-        await this.plugin.saveSettings();
-        await this.plugin.libraryManager.loadLibraries();
-        this.renderLibraryTable();
-      })();
-    });
-    const refreshBtn = folderItem.createEl('button', {
-      text: '刷新',
-      cls: 'blfc-lib-refresh-btn',
-    });
-    refreshBtn.addEventListener('click', () => {
-      void (async () => {
-        await this.plugin.libraryManager.reloadLibraries();
-        new Notice('词库已刷新');
-        this.renderLibraryTable();
-      })();
-    });
-  }
-
   /** 渲染「词库列表」二级页面（替换整页内容；返回栏样式与分组二级页一致） */
   private renderLibraryListSubpage(): void {
     const { containerEl } = this;
     containerEl.empty();
     containerEl.addClass('blfc-plugin');
 
-    // 顶部返回栏
-    const nav = containerEl.createDiv({ cls: 'blfc-fmt-subnav' });
-    const backBtn = nav.createEl('button', { text: '返回', cls: 'blfc-fmt-btn' });
-    backBtn.addEventListener('click', () => this.backToOverview());
-    nav.createSpan({ text: '词库管理', cls: 'blfc-fmt-subnav-crumb' });
-    nav.createSpan({ text: '› 词库列表', cls: 'blfc-fmt-subnav-crumb' });
-
-    new Setting(containerEl).setName('词库列表').setHeading();
     containerEl.createDiv({
       text: '点击词库行可切换当前词库；● = 当前使用。',
       cls: 'blfc-fmt-hint',
@@ -1443,6 +941,7 @@ sad|sad|悲伤的`,
           this.plugin.updateStatusBar();
           if (this.plugin.quickPanel) this.plugin.quickPanel.refresh();
           this.renderLibraryTable();
+          this.onDataChanged();
         })();
       });
 
@@ -1511,7 +1010,7 @@ sad|sad|悲伤的`,
           iconInput.title = '';
         } else {
           iconInput.classList.add('blfc-lib-icon-err');
-          iconInput.title = '无法解析此图标名：请确认来源插件已启用（CI-* 需 Custom Icons 插件），或改用 lucide 内置图标名 / Emoji';
+          iconInput.title = '无法解析此图标名：请确认来源插件已启用（ci-* 需 custom icons 插件），或改用 lucide 内置图标名 / emoji';
         }
       });
 
@@ -1521,5 +1020,340 @@ sad|sad|悲伤的`,
         cls: isActive ? 'blfc-dot-on' : 'blfc-dot-off',
       });
     });
+  }
+}
+
+/** 布尔设置项的键名（toggle 用） */
+type BoolSettingKey = {
+  [K in keyof BLFormatCompleterSettings]: BLFormatCompleterSettings[K] extends boolean ? K : never;
+}[keyof BLFormatCompleterSettings];
+
+/** 数值设置项的键名（slider 用） */
+type NumberSettingKey = {
+  [K in keyof BLFormatCompleterSettings]: BLFormatCompleterSettings[K] extends number ? K : never;
+}[keyof BLFormatCompleterSettings];
+
+/**
+ * 插件设置页（1.13+ 声明式设置 API）。
+ * 1.13 起 PluginSettingTab.display() 已废弃，设置项改由 getSettingDefinitions() 描述：
+ * 全部设置项直接铺在本页；需要独立一页的内容（分组配置 / 词库列表 / 词条格式 / 词库参考）
+ * 以 page 入口行的形式出现，点击进入 {@link InFlowSubpage}。
+ */
+export class SimpleScriptSettingTab extends PluginSettingTab {
+  constructor(app: App, private plugin: SimpleScriptCompleter) {
+    super(app, plugin);
+  }
+
+  /** 读取单个设置项（声明式 control 用） */
+  override getControlValue(key: string): unknown {
+    return (this.plugin.settings as unknown as Record<string, unknown>)[key];
+  }
+
+  /** 写入并持久化设置项：走 plugin.saveSettings() 以保留其副作用（如悬浮面板的创建/销毁） */
+  override async setControlValue(key: string, value: unknown): Promise<void> {
+    (this.plugin.settings as unknown as Record<string, unknown>)[key] = value;
+    await this.plugin.saveSettings();
+  }
+
+  override getSettingDefinitions(): SettingDefinitionItem[] {
+    return [
+      this.group('基本设置', [
+        this.toggle('启用插件', '启用或禁用格式补全功能', 'enabled'),
+        this.toggle('自动对话建议', '在角色名后自动建议插入对话格式', 'autoDialogue'),
+      ]),
+
+      this.group('智能补全', [
+        this.toggle(
+          '使用 Enter 提交词条',
+          '开启后，弹窗中按 Enter 直接确认高亮的候选；关闭后 Enter 仅作换行，需用鼠标点击候选来确认',
+          'enableEnterSubmit',
+        ),
+        this.toggle('启用智能补全', '启用智能补全功能', 'enableSmartCompletion'),
+        this.toggle('启用上下文感知', '根据光标位置自动提供相关补全建议', 'enableContextAware'),
+        this.toggle(
+          '启用最小触发',
+          '在特定格式位置（如场景标题、角色名）即使没有输入也显示建议',
+          'enableMinimalTrigger',
+        ),
+        this.toggle(
+          '搜索类弹窗中也补全',
+          '命令面板 / 快速切换 / 第三方 SuggestModal 等「搜索类」弹窗内也触发补全。'
+            + '第三方插件把普通输入框做成 SuggestModal 时可开启；默认关闭以免命令名被剧本候选刷屏',
+          'enableInSearchPrompt',
+        ),
+        this.toggle('启用拼音匹配', '启用拼音首字母匹配功能', 'enablePinyin'),
+        this.slider('智能补全最小触发长度', '输入多少个字符后开始智能补全建议', 'smartMinLength', 1, 5, 1),
+        this.slider('智能补全最大建议数', '智能补全最多显示多少个建议', 'smartMaxSuggestions', 5, 20, 1),
+      ]),
+
+      this.group('组合建议', [
+        this.toggle(
+          '启用场景/对话组合建议',
+          '生成「场景×时间」「角色×台词」的组合词条；词库较大时组合项可能淹没真实词条，可关闭',
+          'enableCombos',
+        ),
+        this.slider(
+          '组合建议最大条数',
+          '组合词条的上限，超出部分自动截断（仅启用组合建议时生效）',
+          'comboMaxItems',
+          20,
+          200,
+          10,
+        ),
+      ]),
+
+      this.group('快捷悬浮面板', [
+        this.toggle('启用快捷悬浮面板', '在编辑器界面显示词库快捷操作面板', 'enableQuickPanel'),
+        this.toggle('词库更新自动刷新', '修改词库文件后自动刷新当前词库（无需手动操作）', 'enableAutoRefresh'),
+        this.toggle('自动刷新后显示通知', '词库自动刷新后显示简短通知', 'showAutoRefreshNotice'),
+      ]),
+
+      this.group('格式模板', this.formatItems(), 'blfc-fmt-compact'),
+      this.group('词库管理', this.libraryItems()),
+      this.group('词条格式', [this.itemFormatsEntry()]),
+      this.group('词库参考', [
+        {
+          type: 'page',
+          name: '词库参考',
+          desc: '词库文件（.md）的书写格式：章节标题、词条分隔（显示|插入|描述）、列表标记与 YAML 元数据',
+          page: () => this.page({ kind: 'reference' }),
+        },
+      ]),
+      this.group('调试', [
+        {
+          name: '测试功能',
+          desc: '测试当前词库加载情况',
+          action: () => this.showLibraryTest(),
+        },
+      ]),
+    ];
+  }
+
+  /* ---------------- 定义构造小工具 ---------------- */
+
+  private group(
+    heading: string,
+    items: SettingGroupItem[],
+    cls?: string,
+    extraButtons?: ((component: ExtraButtonComponent) => unknown)[],
+  ): SettingDefinitionItem {
+    const def: SettingDefinitionGroup = { type: 'group', heading, items };
+    if (cls) def.cls = cls;
+    if (extraButtons) def.extraButtons = extraButtons;
+    return def;
+  }
+
+  private toggle(name: string, desc: string, key: BoolSettingKey): SettingDefinition {
+    return { name, desc, control: { type: 'toggle', key, defaultValue: this.plugin.settings[key] } };
+  }
+
+  private slider(
+    name: string,
+    desc: string,
+    key: NumberSettingKey,
+    min: number,
+    max: number,
+    step: number,
+  ): SettingDefinition {
+    return {
+      name,
+      desc,
+      control: { type: 'slider', key, min, max, step, defaultValue: this.plugin.settings[key] },
+    };
+  }
+
+  /** 建一个二级页（数据变化后刷新本页定义，让入口行的描述保持最新） */
+  private page(mode: SubpageMode): SettingPage {
+    return new InFlowSubpage(this.app, this.plugin, mode, () => this.update());
+  }
+
+  /* ---------------- 格式模板 ---------------- */
+
+  /** 默认触发符 + 各分组入口 + 新建 / 导出 / 导入 */
+  private formatItems(): SettingGroupItem[] {
+    const fm = this.plugin.formatsManager;
+    const items: SettingGroupItem[] = [
+      {
+        name: '默认触发符',
+        desc: '输入后弹出模板菜单；未设专属触发符的分组由它弹出，支持多字符（如 ##）',
+        render: (setting) => {
+          const input = setting.controlEl.createEl('input', {
+            type: 'text',
+            value: fm.triggerChar,
+            placeholder: '@',
+            cls: 'blfc-fmt-trigger-input',
+          });
+          input.addEventListener('keydown', (e) => {
+            e.stopPropagation();
+            if (e.key === 'Enter') this.commitTriggerChar(input.value);
+          });
+          input.addEventListener('blur', () => this.commitTriggerChar(input.value));
+        },
+      },
+    ];
+
+    const groups = fm.file.groups;
+    if (groups.length === 0) {
+      items.push({ name: '暂无分组', desc: '点下方「新建分组」开始。' });
+    } else {
+      groups.forEach((g) => {
+        const count = fm.file.items.filter((i) => i.group === g.id).length;
+        items.push({
+          type: 'page',
+          name: g.name,
+          desc: `${count} 条 · 触发 ${g.trigger ?? fm.triggerChar}`,
+          page: () => this.page({ kind: 'group', groupId: g.id }),
+        });
+      });
+    }
+
+    items.push({
+      name: '新建分组',
+      desc: '分组把模板归到同一个菜单下，条目在分组页里增删',
+      action: () => {
+        new SimpleTextModal(this.app, '新建分组', '分组名，如：周报模板', '', (name) => {
+          const g = { id: fm.newCustomId('grp'), name };
+          void fm.mutate((d) => {
+            d.groups.push(g);
+            return null;
+          });
+          this.update();
+        }).open();
+      },
+    });
+    // 导出 / 导入合并为可折叠的「高级」区块，减少列表纵向占用
+    items.push({
+      name: '高级：导出 / 导入',
+      desc: '备份或批量替换 formats.json 配置',
+      render: (setting) => {
+        setting.settingEl.empty();
+        setting.settingEl.addClass('blfc-fmt-advanced-row');
+        const details = setting.settingEl.createEl('details', { cls: 'blfc-fmt-advanced' });
+        details.createEl('summary', { text: '高级：导出 / 导入' });
+        const tools = details.createDiv({ cls: 'blfc-fmt-tools' });
+        const exportBtn = tools.createEl('button', { text: '导出配置…', cls: 'blfc-fmt-btn' });
+        exportBtn.addEventListener('click', () => new FormatsTransferModal(this.app, this.plugin, 'export').open());
+        const importBtn = tools.createEl('button', { text: '导入配置…', cls: 'blfc-fmt-btn' });
+        importBtn.addEventListener('click', () =>
+          new FormatsTransferModal(this.app, this.plugin, 'import', () => this.update()).open(),
+        );
+      },
+    });
+    return items;
+  }
+
+  /** 修改全局默认触发符：与所有分组专属触发符一起做前缀冲突校验 */
+  private commitTriggerChar(value: string): void {
+    const fm = this.plugin.formatsManager;
+    const ch = value.trim();
+    if (!ch) {
+      new Notice('默认触发符不能为空');
+      this.update();
+      return;
+    }
+    const others = fm.currentTriggerValues().filter((c) => c !== fm.triggerChar);
+    const check = fm.validateTriggerSet([...others, ch]);
+    if (!check.ok) {
+      new Notice(check.message);
+      this.update();
+      return;
+    }
+    void fm.mutate((d) => {
+      d.triggerChar = ch;
+      return null;
+    });
+    this.update();
+  }
+
+  /* ---------------- 词库管理 ---------------- */
+
+  /** 词库文件夹（保持自绘输入框 + 刷新按钮）+ 词库列表入口 */
+  private libraryItems(): SettingGroupItem[] {
+    const s = this.plugin.settings;
+    const libraries = this.plugin.libraryManager.getAvailableLibraries();
+    const active = this.plugin.libraryManager.activeLibrary;
+    return [
+      {
+        name: '词库文件夹',
+        desc: '存放词库 .md 文件的 vault 内相对路径（如 我的剧本库）',
+        render: (setting) => {
+          const input = setting.controlEl.createEl('input', {
+            type: 'text',
+            placeholder: '例如: 我的剧本库 或 /我的剧本/词库',
+            cls: 'blfc-lib-folder-input',
+          });
+          input.value = s.libraryFolder || '';
+          input.addEventListener('change', () => {
+            s.libraryFolder = input.value.trim();
+            void (async () => {
+              await this.plugin.saveSettings();
+              await this.plugin.libraryManager.loadLibraries();
+              this.update();
+            })();
+          });
+          const refreshBtn = setting.controlEl.createEl('button', {
+            text: '刷新',
+            cls: 'blfc-lib-refresh-btn',
+          });
+          refreshBtn.addEventListener('click', () => {
+            void (async () => {
+              await this.plugin.libraryManager.reloadLibraries();
+              new Notice('词库已刷新');
+              this.update();
+            })();
+          });
+        },
+      },
+      {
+        type: 'page',
+        name: '词库列表',
+        desc: libraries.length === 0
+          ? '尚未找到词库文件'
+          : `共 ${libraries.length} 个词库${active ? `，当前使用「${active}」` : '，尚未选择当前词库'}`,
+        page: () => this.page({ kind: 'libraryList' }),
+      },
+    ];
+  }
+
+  /* ---------------- 词条格式 / 调试 ---------------- */
+
+  /** 词条格式入口（描述里带上当前格式概览） */
+  private itemFormatsEntry(): SettingGroupItem {
+    const formats = this.plugin.itemFormatsManager.formats;
+    return {
+      type: 'page',
+      name: '词条格式',
+      desc: formats.length === 0
+        ? '当前没有任何词条格式 —— 词库将解析不出任何词条，点此配置'
+        : `共 ${formats.length} 条，按顺序尝试、第一条匹配的生效：${formats.map((f) => f.template).join('　/　')}`,
+      page: () => this.page({ kind: 'itemFormats' }),
+    };
+  }
+
+  /** 调试：把当前词库加载情况整段弹出来 */
+  private showLibraryTest(): void {
+    const libraryDir = this.plugin.libraryManager.getLibraryDirectory();
+    const libraries = this.plugin.libraryManager.getAvailableLibraries();
+    const activeLibrary = this.plugin.libraryManager.activeLibrary;
+    let message = '';
+    if (libraryDir) {
+      message += `词库文件夹: ${libraryDir}\n`;
+      message += `找到 ${libraries.length} 个词库\n`;
+      if (activeLibrary) {
+        const info = this.plugin.libraryManager.getLibraryInfo(activeLibrary);
+        message += `当前词库: ${activeLibrary}\n`;
+        if (info) {
+          message += `总词条数: ${info.itemCount}个\n`;
+          if (info.metadata && Object.keys(info.metadata).length > 0) {
+            message += `元数据: ${JSON.stringify(info.metadata)}\n`;
+          }
+        }
+      } else {
+        message += '当前未使用词库';
+      }
+    } else {
+      message = '请先设置词库文件夹';
+    }
+    new Notice(message);
   }
 }

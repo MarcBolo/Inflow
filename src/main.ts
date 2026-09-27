@@ -2,7 +2,7 @@
  * InFlow 主插件入口
  * 剧本格式补全插件：场景/角色/对话格式插入、词库智能补全、时间戳、悬浮快捷面板
  */
-import { Notice, Plugin, TFile, TFolder, debounce } from 'obsidian';
+import { Notice, Plugin, TFile, debounce } from 'obsidian';
 import type { Editor, TAbstractFile } from 'obsidian';
 import { LibraryManager } from './libraryManager';
 import { LibraryCreationModal, LibrarySwitcherModal } from './libraryModals';
@@ -29,7 +29,6 @@ import {
 import type {
   BLFormatCompleterSettings,
   EditorLike,
-  FormatItem,
   LibraryData,
   LibraryItem,
   SmartItem,
@@ -92,7 +91,6 @@ export class SimpleScriptCompleter extends Plugin {
 
   override async onload(): Promise<void> {
     await this.loadSettings();
-    this.addSettingTab(new SimpleScriptSettingTab(this.app, this));
 
     // 初始化词条格式管理器（itemFormats.json）：必须早于词库加载 ——
     // 词条行的解析语法由它提供（模板驱动，代码中不再有写死的段数判定）
@@ -159,6 +157,9 @@ export class SimpleScriptCompleter extends Plugin {
     this.registerEvent(this.app.vault.on('rename', (file) => this.handleFileChange(file)));
     this.registerEvent(this.app.vault.on('modify', (file) => this._debouncedFileChange!(file)));
 
+    // 注册设置页：必须放在所有管理器初始化之后 —— addSettingTab() 会立刻调用
+    // getSettingDefinitions()，而它要读 formatsManager / libraryManager / itemFormatsManager
+    this.addSettingTab(new SimpleScriptSettingTab(this.app, this));
   }
 
   override onunload(): void {
@@ -382,9 +383,9 @@ export class SimpleScriptCompleter extends Plugin {
   ): void {
     for (const scene of scenes) {
       for (const time of times) {
-        const sceneDisplay = scene.display || String(scene);
+        const sceneDisplay = scene.display || scene.insert;
         const sceneInsert = scene.insert || sceneDisplay;
-        const timeDisplay = time.display || String(time);
+        const timeDisplay = time.display || time.insert;
         const timeInsert = time.insert || timeDisplay;
 
         this.allSmartItems.push({
@@ -410,9 +411,9 @@ export class SimpleScriptCompleter extends Plugin {
 
     characters.slice(0, 5).forEach((character) => {
       dialogues.slice(0, 3).forEach((dialogue) => {
-        const charDisplay = character.display || String(character);
+        const charDisplay = character.display || character.insert;
         const charInsert = character.insert || charDisplay;
-        const dialogueDisplay = dialogue.display || String(dialogue);
+        const dialogueDisplay = dialogue.display || dialogue.insert;
         const dialogueInsert = dialogue.insert || dialogueDisplay;
 
         this.allSmartItems.push({
@@ -1009,7 +1010,7 @@ export class SimpleScriptCompleter extends Plugin {
     // ---- 时间戳命令 ----
     this.addCommand({
       id: 'insert-timestamp',
-      name: '插入时间戳 (YYYY-MM-DD-HH:mm)',
+      name: '插入时间戳 (yyyy-mm-dd-hh:mm)',
       callback: () => this.insertTimestampAtCursor(),
     });
 

@@ -1,12 +1,13 @@
 {
   "name": "inflow",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "让词库的灵感流入笔尖——自建词库智能联想补全插件（Obsidian）",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
     "build": "node esbuild.config.mjs production",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "sync-obsidian-types": "node -e \"require('fs').copyFileSync('node_modules/obsidian/obsidian.d.ts','types/obsidian.d.ts');console.log('types/obsidian.d.ts 已从 node_modules/obsidian 同步')\""
   },
   "keywords": [
     "obsidian",
@@ -21,6 +22,7 @@
     "url": "https://github.com/MarcBolo/Inflow.git"
   },
   "devDependencies": {
+    "@codemirror/view": "^6.38.6",
     "@types/node": "^20.11.5",
     "esbuild-wasm": "^0.21.5",
     "eslint": "^9.39.5",
