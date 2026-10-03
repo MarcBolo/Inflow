@@ -226,7 +226,10 @@ export class TextInserter {
           ? '判定: ✗ 属于「搜索类弹窗」(.prompt)，当前被排除。可在设置页开启「搜索类弹窗中也触发补全」。'
           : '判定: ✗ 位于排除容器内（InFlow 自身面板 / 彩条 / 建议列表 / 通知）',
       );
-    } else if (TextInserter.isWorkspaceEditor(el)) {
+    } else if (TextInserter.isWorkspaceEditor(el) && TextInserter.getCodeMirrorView(el)) {
+      // 与 inputListener 的早退条件保持一致：仅「确实是 CM 编辑器」的工作区元素才归
+      // editor-change 通道。分栏 textarea 位于 .markdown-source-view 内但并无 CM 视图，
+      // 只看 isWorkspaceEditor 会误报为「Obsidian 自带编辑器」。
       lines.push('判定: ✓ 由 editor-change 通道处理（Obsidian 自带编辑器）');
     } else if (TextInserter.getCodeMirrorView(el)) {
       lines.push('判定: ✓ 第三方插件自建 CodeMirror 编辑器（走全局 input 通道）');
@@ -421,6 +424,13 @@ export class TextInserter {
    */
   static getCodeMirrorElement(el: HTMLElement | null | undefined): HTMLElement | null {
     if (!el || typeof el.closest !== 'function') return null;
+    // 嵌在 CM 内容区（.cm-content）内的原生表单控件（textarea / input）属于某个
+    // widget 自己的输入面，不是外层编辑器：向外 closest('.cm-editor') 命中的是宿主
+    // 编辑器，会把「读文本 / 插入 / 替换 / 光标定位」全部算到分栏外的文档上。
+    // 例：block-editor 分栏编辑态就是 .cm-content 内的 <textarea>。
+    // 注意 CM6 搜索面板的输入在 .cm-panels（.cm-content 的兄弟节点），不受影响。
+    const tag = typeof el.tagName === 'string' ? el.tagName.toLowerCase() : '';
+    if ((tag === 'textarea' || tag === 'input') && el.closest('.cm-content')) return null;
     return (
       el.closest<HTMLElement>('.cm-editor') ||
       el.querySelector<HTMLElement>('.cm-editor') ||

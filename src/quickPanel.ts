@@ -205,7 +205,6 @@ export class LibraryEdgeStrips {
         const ok = await this.plugin.libraryManager.setActiveLibrary(libraryName);
         if (!ok) return;
         await this.plugin.buildSmartCompletionIndex();
-        this.plugin.updateStatusBar();
         // 先原位交换激活类让放大过渡（transform）可见，动画结束后再全量重建（图标重试等保持一致）
         this.activateStrip(libraryName);
         window.setTimeout(() => {

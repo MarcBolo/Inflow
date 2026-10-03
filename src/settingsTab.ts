@@ -4,6 +4,7 @@
 import { Modal, Notice, PluginSettingTab, Setting, SettingPage, setIcon } from 'obsidian';
 import type { App, ExtraButtonComponent, SettingDefinition, SettingDefinitionGroup, SettingDefinitionItem, SettingGroupItem } from 'obsidian';
 import { FormatItemEditModal, FormatsTransferModal } from './formatModals';
+import { DONATE_CODES, type DonateCode } from './donate';
 import type { SimpleScriptCompleter } from './main';
 import type { BLFormatCompleterSettings, FormatItem, ItemFormat } from './types';
 import { MAX_QUICK_COMMANDS } from './formatsManager';
@@ -159,6 +160,31 @@ class ConfirmModal extends Modal {
           }),
       )
       .addButton((btn) => btn.setButtonText('取消').onClick(() => this.close()));
+  }
+
+  override onClose(): void {
+    this.contentEl.empty();
+  }
+}
+
+/** 收款码等图片的放大预览：把 Data URI 铺满弹窗，便于手机扫码。Esc / 点击遮罩关闭。 */
+class ImagePreviewModal extends Modal {
+  constructor(
+    app: App,
+    private src: string,
+    private label: string,
+  ) {
+    super(app);
+    this.modalEl.addClass('blfc-image-preview-modal');
+    this.titleEl.setText(label);
+  }
+
+  override onOpen(): void {
+    const box = this.contentEl.createDiv({ cls: 'blfc-image-preview-box' });
+    box.createEl('img', {
+      cls: 'blfc-image-preview',
+      attr: { src: this.src, alt: this.label },
+    });
   }
 
   override onClose(): void {
@@ -652,7 +678,6 @@ sad|sad|悲伤的`,
   private async afterItemFormatsChanged(): Promise<void> {
     await this.plugin.libraryManager.reloadLibraries();
     await this.plugin.buildSmartCompletionIndex();
-    this.plugin.updateStatusBar();
     if (this.plugin.quickPanel) this.plugin.quickPanel.refresh();
     this.onDataChanged();
   }
@@ -938,7 +963,6 @@ sad|sad|悲伤的`,
           const ok = await this.plugin.libraryManager.setActiveLibrary(libraryName);
           if (!ok) return;
           await this.plugin.buildSmartCompletionIndex();
-          this.plugin.updateStatusBar();
           if (this.plugin.quickPanel) this.plugin.quickPanel.refresh();
           this.renderLibraryTable();
           this.onDataChanged();
@@ -1126,6 +1150,67 @@ export class SimpleScriptSettingTab extends PluginSettingTab {
           action: () => this.showLibraryTest(),
         },
       ]),
+
+      ...this.donateGroups(),
+    ];
+  }
+
+  /**
+   * 「打赏支持」分组：把打赏收款码渲染成可折叠区块（默认收起，点击展开）。
+   * 收款码以 Base64 Data URI 内联在 src/donate.ts，构建时打包进 main.js；
+   * 未配置任何图片时不生成该分组。
+   */
+  private donateGroups(): SettingDefinitionItem[] {
+    const codes: DonateCode[] = DONATE_CODES.filter((c) => c.src.trim().length > 0);
+    if (codes.length === 0) return [];
+    return [
+      {
+        type: 'group',
+        items: [
+          {
+            name: '打赏支持',
+            aliases: ['打赏', '赞赏', '捐赠', '收款码', 'donate', 'sponsor'],
+            render: (setting) => {
+              setting.settingEl.addClass('blfc-donate-row');
+              const details = setting.settingEl.createEl('details', { cls: 'blfc-donate' });
+              const summary = details.createEl('summary', { cls: 'blfc-donate-summary' });
+              const chevron = summary.createSpan({ cls: 'blfc-donate-chevron' });
+              setIcon(chevron, 'chevron-right');
+              summary.createSpan({ cls: 'blfc-donate-label', text: '打赏支持' });
+              summary.createSpan({
+                cls: 'blfc-donate-hint',
+                text: '如果这个插件对你有帮助，欢迎请作者喝杯咖啡',
+              });
+              const body = details.createDiv({ cls: 'blfc-donate-body' });
+              const list = body.createDiv({ cls: 'blfc-donate-codes' });
+              for (const code of codes) {
+                const fig = list.createEl('figure', { cls: 'blfc-donate-code' });
+                // 不用 <button> 包裹 <img>：Obsidian 全局按钮样式会限制高度并裁切二维码
+                const img = fig.createEl('img', {
+                  attr: {
+                    src: code.src,
+                    alt: code.alt,
+                    role: 'button',
+                    tabindex: '0',
+                    title: '点击放大',
+                    'aria-label': `${code.alt}，点击放大`,
+                  },
+                });
+                const openPreview = () =>
+                  new ImagePreviewModal(this.app, code.src, code.label).open();
+                img.addEventListener('click', openPreview);
+                img.addEventListener('keydown', (e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    openPreview();
+                  }
+                });
+                fig.createEl('figcaption', { text: `${code.label} · 点击放大` });
+              }
+            },
+          },
+        ],
+      },
     ];
   }
 

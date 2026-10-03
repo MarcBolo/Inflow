@@ -304,9 +304,12 @@ export class GlobalInputListener {
 
   // ---- 选择回调：两条路径统一交给 main.insertFormatItem 渲染插入 ----
   private _onFormatSelectDOM(el: HTMLElement, suggestion: Suggestion, prefixChar: string): void {
+    // 抑制期必须先于插入动作设置：insertFormatItem 内部的替换会【同步】触发
+    // editor-change / input，若事后才设抑制期，自触发的 _processText 已经带着
+    // 新查询词把弹窗重新弹出（症状：空格确认后弹窗不消失，再按空格反复重插）。
+    this._confirmSuppressUntil = Date.now() + 300;
     const len = this._calcDeleteLength(TextInserter.getTextBeforeCursor(el), prefixChar);
     this.plugin.insertFormatItem(null, el, suggestion, len);
-    this._confirmSuppressUntil = Date.now() + 300;
   }
 
   /**
@@ -329,9 +332,11 @@ export class GlobalInputListener {
     }
     const insert = suggestion.insert ?? '';
     if (!insert) return;
+    // 抑制期先于替换设置：replaceBeforeCursor 内部同步派发 input 事件，
+    // 事后设置来不及拦住自触发的 _processText（弹窗立即带新查询词重弹）。
+    this._confirmSuppressUntil = Date.now() + 300;
     TextInserter.replaceBeforeCursor(el, insert, len);
     this.plugin.recordUsage(suggestion);
-    this._confirmSuppressUntil = Date.now() + 300;
   }
 
   // ---- 选择回调：CM 编辑器的 Obsidian Editor API ----
@@ -339,8 +344,9 @@ export class GlobalInputListener {
     const cursor = editor.getCursor();
     const textBefore = editor.getLine(cursor.line).substring(0, cursor.ch);
     const len = this._calcDeleteLength(textBefore, prefixChar);
-    this.plugin.insertFormatItem(editor, null, suggestion, len);
+    // 抑制期先于插入设置，理由同 _onFormatSelectDOM
     this._confirmSuppressUntil = Date.now() + 300;
+    this.plugin.insertFormatItem(editor, null, suggestion, len);
   }
 
   private _onSmartSelectCM(editor: Editor, suggestion: Suggestion, prefixChar: string): void {
@@ -355,6 +361,9 @@ export class GlobalInputListener {
     }
     const insert = suggestion.insert ?? '';
     if (!insert) return;
+    // 抑制期先于替换设置：replaceRange 会同步触发 editor-change，事后设置拦不住
+    // 自触发（弹窗立即以新查询词如「sidian」重弹，再按空格反复重插成 obobob…）。
+    this._confirmSuppressUntil = Date.now() + 300;
     // 删除 [base, cursor]（查询词）后插入补全文本
     const base = { line: cursor.line, ch: Math.max(0, cursor.ch - len) };
     editor.replaceRange(insert, base, cursor);
@@ -366,7 +375,6 @@ export class GlobalInputListener {
       ch: rel.line === 0 ? base.ch + rel.ch : rel.ch,
     });
     this.plugin.recordUsage(suggestion);
-    this._confirmSuppressUntil = Date.now() + 300;
   }
 
   detectLineContext(line: string): string {

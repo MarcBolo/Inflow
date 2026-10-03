@@ -35,11 +35,6 @@ import type {
   Suggestion,
 } from './types';
 
-/** 状态栏项（obsidian 运行时为 HTMLElement 附带 onClick） */
-type StatusBarItem = HTMLElement & {
-  onClick?: ((ev: MouseEvent) => unknown) | null;
-};
-
 /** CJK 基本区汉字判定（覆盖 99% 以上常用字；扩展区生僻字不做拼音映射） */
 const CJK_BASIC_RE = /[\u4e00-\u9fff]/;
 
@@ -77,7 +72,6 @@ export class SimpleScriptCompleter extends Plugin {
   globalListener!: GlobalInputListener;
   sceneNumberGenerator = new SceneNumberGenerator();
   quickPanel: LibraryEdgeStrips | null = null;
-  statusBarItem!: StatusBarItem;
 
   // 智能补全索引
   allSmartItems: SmartItem[] = [];
@@ -108,7 +102,6 @@ export class SimpleScriptCompleter extends Plugin {
     // 启动时已打开的文档不会再触发 file-open，必须在这里主动构建一次索引，
     // 否则打开 Obsidian 后直接输入将拿不到任何候选。
     await this.buildSmartCompletionIndex();
-    this.updateStatusBar();
 
     // 注册全局输入监听器（替代 EditorSuggest，覆盖所有插件的输入框）
     this.globalListener = new GlobalInputListener(this);
@@ -120,9 +113,6 @@ export class SimpleScriptCompleter extends Plugin {
     // 初始化场景编号生成器
     this.sceneNumberGenerator = new SceneNumberGenerator();
 
-    // 初始化状态栏
-    this.setupStatusBar();
-
     // 初始化快捷悬浮面板（Ribbon 图标已移除：它只是悬浮按钮的第二个入口，
     // 且在面板关闭时会跳转到设置页，行为不一致）
     if (this.settings.enableQuickPanel) {
@@ -130,12 +120,11 @@ export class SimpleScriptCompleter extends Plugin {
       this.quickPanel.create();
     }
 
-    // 监听文件激活事件（重建索引 + 刷新状态栏；当前词库不再随文件自动切换）
+    // 监听文件激活事件（重建索引 + 刷新彩条；当前词库不再随文件自动切换）
     this.registerEvent(
       this.app.workspace.on('file-open', async (file) => {
         if (file) {
           await this.buildSmartCompletionIndex();
-          this.updateStatusBar();
           if (this.quickPanel) this.quickPanel.refresh();
         }
       }),
@@ -187,7 +176,6 @@ export class SimpleScriptCompleter extends Plugin {
       // 如果当前活动词库是这个文件，自动重新构建索引
       if (isActiveLibrary) {
           await this.buildSmartCompletionIndex();
-          this.updateStatusBar();
           if (this.quickPanel) this.quickPanel.refresh();
 
           if (this.settings.showAutoRefreshNotice) {
@@ -240,44 +228,6 @@ export class SimpleScriptCompleter extends Plugin {
     const stats = this.settings.usageStats;
     if (!stats) return 0;
     return stats[`${item.library}::${item.display}`] || 0;
-  }
-
-  // ============ 状态栏 ============
-  setupStatusBar(): void {
-    this.statusBarItem = this.addStatusBarItem();
-    this.updateStatusBar();
-  }
-
-  updateStatusBar(): void {
-    if (!this.statusBarItem) return;
-    const activeLibrary = this.libraryManager.activeLibrary;
-    const libraryDir = this.libraryManager.getLibraryDirectory();
-
-    if (activeLibrary && libraryDir) {
-      const info = this.libraryManager.getLibraryInfo(activeLibrary);
-      const itemCount = info ? info.itemCount : 0;
-      this.statusBarItem.setText(`📚 ${activeLibrary}(${itemCount})`);
-      this.statusBarItem.onClick = () => this.showLibrarySwitcher();
-    } else if (libraryDir) {
-      this.statusBarItem.setText('📚 无词库');
-      this.statusBarItem.onClick = () => this.showLibrarySwitcher();
-    } else {
-      this.statusBarItem.setText('📚 未设置');
-      this.statusBarItem.onClick = () => {
-        this.openSettings();
-      };
-    }
-  }
-
-  /** 打开插件设置页 */
-  private openSettings(): void {
-    const setting = (this.app as unknown as {
-      setting?: { open(): void; openTabById(id: string): void };
-    }).setting;
-    if (setting) {
-      setting.open();
-      setting.openTabById(this.manifest.id);
-    }
   }
 
   // ============ 智能补全索引 ============
@@ -813,7 +763,6 @@ export class SimpleScriptCompleter extends Plugin {
         }
 
         await this.buildSmartCompletionIndex();
-        this.updateStatusBar();
         if (this.quickPanel) this.quickPanel.refresh();
 
         const active = this.libraryManager.activeLibrary;
@@ -899,7 +848,6 @@ export class SimpleScriptCompleter extends Plugin {
                 await this.libraryManager.reloadLibraries();
                 await this.libraryManager.setActiveLibrary(libraryName.trim());
                 await this.buildSmartCompletionIndex();
-                this.updateStatusBar();
                 if (this.quickPanel) this.quickPanel.refresh();
               } catch (e) {
                 console.error('创建词库文件失败:', e);
@@ -1133,12 +1081,11 @@ export class SimpleScriptCompleter extends Plugin {
     modal.open();
   }
 
-  /** 切库统一流程：置活动词库 → 重建索引 → 刷新状态栏/彩条 → 提示 */
+  /** 切库统一流程：置活动词库 → 重建索引 → 刷新彩条 → 提示 */
   private async selectLibrary(name: string | null): Promise<void> {
     if (!name) return;
     await this.libraryManager.setActiveLibrary(name);
     await this.buildSmartCompletionIndex();
-    this.updateStatusBar();
     if (this.quickPanel) this.quickPanel.refresh();
     new Notice(`已切换到词库: ${name}`);
   }

@@ -24,7 +24,7 @@ export interface LoadedLibrary {
   lastModified: number;
 }
 
-/** 词库详细信息（用于状态栏 / 设置页 / 测试按钮展示） */
+/** 词库详细信息（用于设置页 / 测试按钮展示） */
 export interface LibraryInfo {
   name: string;
   path: string;
